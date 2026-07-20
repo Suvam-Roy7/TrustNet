@@ -1,0 +1,97 @@
+Core Microservices
+
+1. Authentication Service
+
+Responsible for:
+
+Registration
+Login
+JWT generation
+Password reset
+Email verification
+MFA (future)
+
+2. Profile Service
+
+Responsible for:
+
+User profile
+Bio
+Profile photo
+Trust level
+Verification status
+
+3. Social Graph Service
+
+Responsible for:
+
+Follow
+Unfollow
+Followers
+Following
+Connection types
+
+4. Post Service
+
+Responsible for:
+
+Create post
+Edit post
+Delete post
+Feed generation
+
+5. Comment Service
+
+Responsible for:
+
+Comments
+Replies
+
+6. Notification Service
+
+You definitely want this.
+
+Responsible for:
+
+New follower
+Comment on post
+Mention
+Verification approved
+System announcements
+
+7. Verification Service
+
+This is your unique feature.
+
+Responsible for:
+
+Human verification
+Professional verification
+Trust score
+
+8. Search Service
+
+Responsible for:
+
+User search
+Post search
+
+9. Messaging Service (Phase 2)
+
+Responsible for:
+
+Private chats
+Group chats
+End-to-end encryption
+
+10. Media Service
+
+Responsible for:
+
+Profile pictures
+Post images
+
+Storage:
+
+S3 compatible storage
+MinIO locally

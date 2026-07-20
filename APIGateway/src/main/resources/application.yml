@@ -1,0 +1,151 @@
+server:
+  port: 7000
+
+spring:
+  application:
+    name: APIGateway
+
+  cloud:
+    gateway:
+      routes:
+
+        # ================= BUSINESS ROUTES =================
+
+        - id: auth-service
+          uri: lb://AUTHSERVICE
+          predicates:
+            - Path=/api/auth/**
+
+        - id: profile-service
+          uri: lb://PROFILESERVICE
+          predicates:
+            - Path=/api/profiles/**
+          filters:
+            - JwtAuthenticationFilter
+
+        - id: social-graph-service
+          uri: lb://SOCIALGRAPHSERVICE
+          predicates:
+            - Path=/api/social/**
+          filters:
+            - JwtAuthenticationFilter
+
+        - id: post-service
+          uri: lb://POSTSERVICE
+          predicates:
+            - Path=/api/posts/**
+          filters:
+            - JwtAuthenticationFilter
+
+        - id: media-service
+          uri: lb://MEDIASERVICE
+          predicates:
+            - Path=/api/media/**
+          filters:
+            - JwtAuthenticationFilter
+
+        - id: notification-service
+          uri: lb://NOTIFICATIONSERVICE
+          predicates:
+            - Path=/api/notifications/**
+          filters:
+            - JwtAuthenticationFilter
+
+        - id: feed-service
+          uri: lb://FEEDSERVICE
+          predicates:
+            - Path=/api/feed/**
+          filters:
+            - JwtAuthenticationFilter
+
+        # ================= SWAGGER DOCS ROUTES =================
+
+        - id: auth-docs
+          uri: lb://AUTHSERVICE
+          predicates:
+            - Path=/authservice/**
+
+          filters:
+            - RewritePath=/authservice/(?<segment>.*), /${segment}
+
+        - id: profile-docs
+          uri: lb://PROFILESERVICE
+          predicates:
+            - Path=/profileservice/**
+
+          filters:
+            - RewritePath=/profileservice/(?<segment>.*), /${segment}
+
+        - id: socialgraph-docs
+          uri: lb://SOCIALGRAPHSERVICE
+          predicates:
+            - Path=/socialgraphservice/**
+
+          filters:
+            - RewritePath=/socialgraphservice/(?<segment>.*), /${segment}
+
+        - id: post-docs
+          uri: lb://POSTSERVICE
+          predicates:
+            - Path=/postservice/**
+
+          filters:
+            - RewritePath=/postservice/(?<segment>.*), /${segment}
+
+        - id: media-docs
+          uri: lb://MEDIASERVICE
+          predicates:
+            - Path=/mediaservice/**
+
+          filters:
+            - RewritePath=/mediaservice/(?<segment>.*), /${segment}
+
+        - id: notification-docs
+          uri: lb://NOTIFICATIONSERVICE
+          predicates:
+            - Path=/notificationservice/**
+
+          filters:
+            - RewritePath=/notificationservice/(?<segment>.*), /${segment}
+
+        - id: feed-docs
+          uri: lb://FEEDSERVICE
+          predicates:
+            - Path=/feedservice/**
+
+          filters:
+            - RewritePath=/feedservice/(?<segment>.*), /${segment}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+
+# ================= SWAGGER AGGREGATION =================
+
+springdoc:
+  swagger-ui:
+    enabled: true
+    path: /trustnet/swagger-ui.html
+
+    urls:
+      - name: AUTHSERVICE
+        url: /authservice/v3/api-docs
+
+      - name: PROFILESERVICE
+        url: /profileservice/v3/api-docs
+
+      - name: SOCIALGRAPHSERVICE
+        url: /socialgraphservice/v3/api-docs
+
+      - name: POSTSERVICE
+        url: /postservice/v3/api-docs
+
+      - name: MEDIASERVICE
+        url: /mediaservice/v3/api-docs
+
+      - name: NOTIFICATIONSERVICE
+        url: /notificationservice/v3/api-docs
+
+      - name: FEEDSERVICE
+        url: /feedservice/v3/api-docs
