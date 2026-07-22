@@ -23,87 +23,104 @@ import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
-public class JwtAuthenticationFilter
-        extends OncePerRequestFilter {
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    private final JwtUtil jwtUtil;
+	private final JwtUtil jwtUtil;
+	private final TokenBlacklistService tokenBlacklistService;
 
-    private final TokenBlacklistService tokenBlacklistService;
+	@Override
+	protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+			throws ServletException, IOException {
 
-    @Override
-    protected void doFilterInternal(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain)
-            throws ServletException, IOException {
+		String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
 
-        String authHeader =
-                request.getHeader(HttpHeaders.AUTHORIZATION);
+		/*
+		 * No token means this filter does not authenticate the request. SecurityConfig
+		 * will decide whether the endpoint is public.
+		 */
+		if (authHeader == null || !authHeader.startsWith("Bearer ")) {
 
-        if (authHeader == null
-                || !authHeader.startsWith("Bearer ")) {
+			filterChain.doFilter(request, response);
+			return;
+		}
 
-            filterChain.doFilter(request, response);
-            return;
-        }
+		String token = authHeader.substring(7).trim();
 
-        String token = authHeader.substring(7);
+		if (token.isBlank()) {
+			sendUnauthorized(response, "Authorization token is missing");
+			return;
+		}
 
-        if (tokenBlacklistService.isBlacklisted(token)) {
+		try {
+			/*
+			 * Validate the JWT before reading its claims.
+			 */
+			if (!jwtUtil.validateToken(token)) {
+				sendUnauthorized(response, "Invalid or expired token");
+				return;
+			}
 
-            SecurityContextHolder.clearContext();
+			/*
+			 * Reject tokens revoked during logout.
+			 */
+			if (tokenBlacklistService.isBlacklisted(token)) {
+				SecurityContextHolder.clearContext();
 
-            response.setStatus(
-                    HttpServletResponse.SC_UNAUTHORIZED);
+				sendUnauthorized(response, "Token has been revoked");
+				return;
+			}
 
-            response.setContentType(
-                    "application/json");
+			if (SecurityContextHolder.getContext().getAuthentication() == null) {
 
-            response.getWriter().write(
-                    """
-                    {
-                      "status": 401,
-                      "error": "Unauthorized",
-                      "message": "Token has been revoked"
-                    }
-                    """);
+				Claims claims = jwtUtil.extractClaims(token);
 
-            return;
-        }
+				String userId = claims.getSubject();
 
-        if (jwtUtil.validateToken(token)
-                && SecurityContextHolder
-                        .getContext()
-                        .getAuthentication() == null) {
+				String role = claims.get("role", String.class);
 
-            Claims claims =
-                    jwtUtil.extractClaims(token);
+				if (userId == null || userId.isBlank()) {
+					sendUnauthorized(response, "User ID is missing from token");
+					return;
+				}
 
-            String userId =
-                    claims.getSubject();
+				if (role == null || role.isBlank()) {
+					sendUnauthorized(response, "User role is missing from token");
+					return;
+				}
 
-            String role =
-                    claims.get("role", String.class);
+				String authority = role.startsWith("ROLE_") ? role : "ROLE_" + role;
 
-            if (userId != null && role != null) {
+				List<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(authority));
 
-                List<GrantedAuthority> authorities =
-                        List.of(
-                                new SimpleGrantedAuthority(
-                                        "ROLE_" + role));
+				UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(userId,
+						null, authorities);
 
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                userId,
-                                null,
-                                authorities);
+				SecurityContextHolder.getContext().setAuthentication(authentication);
+			}
 
-                SecurityContextHolder
-                        .getContext()
-                        .setAuthentication(authentication);
-            }
-        }
+			filterChain.doFilter(request, response);
 
-        filterChain.doFilter(request, response);
-    }
+		} catch (Exception exception) {
+			SecurityContextHolder.clearContext();
+
+			sendUnauthorized(response, "Invalid or expired token");
+		}
+	}
+
+	private void sendUnauthorized(HttpServletResponse response, String message) throws IOException {
+
+		response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+
+		response.setContentType("application/json");
+
+		response.setCharacterEncoding("UTF-8");
+
+		response.getWriter().write("""
+				{
+				  "status": 401,
+				  "error": "Unauthorized",
+				  "message": "%s"
+				}
+				""".formatted(message));
+	}
 }

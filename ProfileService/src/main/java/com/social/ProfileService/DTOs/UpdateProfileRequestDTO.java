@@ -13,6 +13,8 @@ public class UpdateProfileRequestDTO {
     private String bio;
 
     private String profession;
+    
+    private String username;
 
     private String location;
 

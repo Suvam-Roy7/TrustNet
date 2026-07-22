@@ -23,7 +23,7 @@ public class PostUpdatedEventConsumer {
 
 		log.info("Received POST_UPDATED event. eventId={}, postId={}", event.eventId(), event.postId());
 
-		FeedPost feedPost = feedPostRepository.findByPostId(event.postId()).orElse(null);
+		FeedPost feedPost = feedPostRepository.findById(event.postId()).orElse(null);
 
 		if (feedPost == null) {
 

@@ -26,8 +26,22 @@ public class FollowCreatedEventConsumer {
 		}
 
 		Notification notification = Notification.builder().eventId(event.eventId())
-				.recipientUserId(event.followedUserId()).actorUserId(event.followerId()).type(NotificationType.FOLLOW)
-				.message("Started following you").isRead(false).build();
+
+				/*
+				 * The original requester receives the accepted notification.
+				 */
+				.recipientUserId(event.followerId())
+
+				/*
+				 * The receiver accepted the request.
+				 */
+				.actorUserId(event.followedUserId())
+
+				.type(NotificationType.FOLLOW_ACCEPTED)
+
+				.message("accepted your follow request.")
+
+				.isRead(false).build();
 
 		notificationRepository.save(notification);
 	}

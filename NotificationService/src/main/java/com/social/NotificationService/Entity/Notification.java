@@ -28,33 +28,39 @@ import lombok.Setter;
 @Builder
 public class Notification {
 
-    @Id
-    @GeneratedValue
-    private UUID id;
+	@Id
+	@GeneratedValue
+	private UUID id;
 
-    private UUID recipientUserId;
+	private UUID recipientUserId;
 
-    private UUID actorUserId;
+	private UUID actorUserId;
 
-    @Enumerated(EnumType.STRING)
-    private NotificationType type;
+	@Enumerated(EnumType.STRING)
+	private NotificationType type;
 
-    private String message;
+	private String message;
 
-    private Boolean isRead;
+	private Boolean isRead;
 
-    private LocalDateTime createdAt;
-    
-    @Column(nullable = false, unique = true)
-    private UUID eventId;
+	private LocalDateTime createdAt;
 
-    @PrePersist
-    public void prePersist() {
+	@Column(nullable = false, unique = true)
+	private UUID eventId;
 
-        createdAt = LocalDateTime.now();
+	@PrePersist
+	public void prePersist() {
 
-        if(isRead == null) {
-            isRead = false;
-        }
-    }
+		if (createdAt == null) {
+			createdAt = LocalDateTime.now();
+		}
+
+		if (isRead == null) {
+			isRead = false;
+		}
+
+		if (eventId == null) {
+			eventId = UUID.randomUUID();
+		}
+	}
 }

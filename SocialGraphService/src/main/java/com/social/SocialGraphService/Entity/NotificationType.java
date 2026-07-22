@@ -2,8 +2,9 @@ package com.social.SocialGraphService.Entity;
 
 public enum NotificationType {
 
-    FOLLOW,
-    LIKE,
+	LIKE,
     COMMENT,
-    MENTION
+    MENTION,
+    FOLLOW_REQUEST,
+    FOLLOW_ACCEPTED
 }

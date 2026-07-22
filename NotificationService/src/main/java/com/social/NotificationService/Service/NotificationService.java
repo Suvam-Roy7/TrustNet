@@ -20,4 +20,17 @@ public interface NotificationService {
 	long getUnreadCount();
 
 	void markAllAsRead();
+	
+	Page<NotificationResponseDTO> getNotifications(
+	        UUID recipientUserId,
+	        int page,
+	        int size
+	);
+
+	NotificationResponseDTO markAsRead(
+	        UUID recipientUserId,
+	        UUID notificationId
+	);
+
+	long getUnreadCount(UUID recipientUserId);
 }

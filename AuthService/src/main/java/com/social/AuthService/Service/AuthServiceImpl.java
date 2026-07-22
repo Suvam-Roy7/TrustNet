@@ -10,7 +10,9 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.social.AuthService.Client.ProfileClient;
 import com.social.AuthService.DTOs.AuthResponseDTO;
+import com.social.AuthService.DTOs.CreateProfileRequestDTO;
 import com.social.AuthService.DTOs.LoginRequestDTO;
 import com.social.AuthService.DTOs.RegisterRequestDTO;
 import com.social.AuthService.DTOs.UserResponseDTO;
@@ -51,19 +53,32 @@ public class AuthServiceImpl implements AuthService {
 	private final TokenBlacklistService tokenBlacklistService;
 
 	private final RefreshTokenService refreshTokenService;
-	
+
+	private final ProfileClient profileClient;
 
 	@Override
+	@Transactional
 	public void register(RegisterRequestDTO request) {
 
-		if (userRepository.existsByEmail(request.getEmail())) {
+		String normalizedEmail = request.getEmail().trim().toLowerCase();
+
+		String normalizedUsername = request.getUsername().trim();
+
+		if (userRepository.existsByEmail(normalizedEmail)) {
 			throw new UserAlreadyExistsException("Email already registered");
 		}
 
-		User user = User.builder().email(request.getEmail()).password(passwordEncoder.encode(request.getPassword()))
+		User user = User.builder().email(normalizedEmail).password(passwordEncoder.encode(request.getPassword()))
 				.emailVerified(false).accountStatus(AccountStatus.ACTIVE).role(Role.USER).build();
 
-		userRepository.save(user);
+		User savedUser = userRepository.save(user);
+
+		CreateProfileRequestDTO profileRequest = new CreateProfileRequestDTO();
+
+		profileRequest.setUserId(savedUser.getId());
+		profileRequest.setUsername(normalizedUsername);
+
+		profileClient.createProfile(profileRequest);
 	}
 
 	@Override
@@ -145,39 +160,27 @@ public class AuthServiceImpl implements AuthService {
 
 	@Override
 	@Transactional
-	public void logout(
-	        String authorizationHeader,
-	        String rawRefreshToken) {
+	public void logout(String authorizationHeader, String rawRefreshToken) {
 
-	    if (authorizationHeader == null
-	            || !authorizationHeader.startsWith("Bearer ")) {
+		if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
 
-	        throw new InvalidAccessTokenException(
-	                "Authorization token is missing or invalid");
-	    }
+			throw new InvalidAccessTokenException("Authorization token is missing or invalid");
+		}
 
-	    String accessToken =
-	            authorizationHeader.substring(7);
+		String accessToken = authorizationHeader.substring(7);
 
-	    Date expiration =
-	            jwtService.extractExpiration(
-	                    accessToken);
+		Date expiration = jwtService.extractExpiration(accessToken);
 
-	    long remainingTtlMillis =
-	            expiration.getTime()
-	                    - System.currentTimeMillis();
+		long remainingTtlMillis = expiration.getTime() - System.currentTimeMillis();
 
-	    if (remainingTtlMillis > 0) {
+		if (remainingTtlMillis > 0) {
 
-	        tokenBlacklistService.blacklistToken(
-	                accessToken,
-	                remainingTtlMillis);
-	    }
+			tokenBlacklistService.blacklistToken(accessToken, remainingTtlMillis);
+		}
 
-	    refreshTokenService.revokeRefreshToken(
-	            rawRefreshToken);
+		refreshTokenService.revokeRefreshToken(rawRefreshToken);
 
-	    SecurityContextHolder.clearContext();
+		SecurityContextHolder.clearContext();
 	}
 
 	@Override
@@ -204,4 +207,6 @@ public class AuthServiceImpl implements AuthService {
 
 		return new AuthResponseDTO(newAccessToken, newRefreshToken);
 	}
+	
+	
 }

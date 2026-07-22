@@ -5,47 +5,85 @@ import java.util.UUID;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "feed_posts", uniqueConstraints = {
-		@UniqueConstraint(name = "uk_feed_post_event", columnNames = "event_id"),
-
-		@UniqueConstraint(name = "uk_feed_post_id", columnNames = "post_id") })
+@Table(name = "feed_posts")
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class FeedPost {
 
-	@Id
-	@GeneratedValue(strategy = GenerationType.UUID)
-	private UUID id;
+    @Id
+    @Column(name = "post_id", nullable = false)
+    private UUID postId;
 
-	@Column(name = "event_id", nullable = false, unique = true)
-	private UUID eventId;
+    @Column(
+            name = "event_id",
+            nullable = false,
+            unique = true
+    )
+    private UUID eventId;
 
-	@Column(name = "post_id", nullable = false, unique = true)
-	private UUID postId;
+    @Column(name = "author_id", nullable = false)
+    private UUID authorId;
 
-	@Column(name = "author_id", nullable = false)
-	private UUID authorId;
+    @Column(name = "author_username")
+    private String authorUsername;
 
-	@Column(name = "content", length = 5000)
-	private String content;
+    @Column(
+            name = "content",
+            nullable = false,
+            columnDefinition = "TEXT"
+    )
+    private String content;
 
-	@Column(name = "created_at", nullable = false)
-	private Instant createdAt;
-	
-	@Column(name = "updated_at")
-	private Instant updatedAt;
+    @Builder.Default
+    @Column(name = "like_count", nullable = false)
+    private Long likeCount = 0L;
+
+    @Builder.Default
+    @Column(name = "comment_count", nullable = false)
+    private Long commentCount = 0L;
+
+    @Column(name = "created_at", nullable = false)
+    private Instant createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
+    @PrePersist
+    public void prePersist() {
+
+        Instant now = Instant.now();
+
+        if (createdAt == null) {
+            createdAt = now;
+        }
+
+        if (updatedAt == null) {
+            updatedAt = createdAt;
+        }
+
+        if (likeCount == null) {
+            likeCount = 0L;
+        }
+
+        if (commentCount == null) {
+            commentCount = 0L;
+        }
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        updatedAt = Instant.now();
+    }
 }

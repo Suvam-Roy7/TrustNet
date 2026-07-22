@@ -3,16 +3,24 @@ package com.social.ProfileService.Service;
 import java.util.UUID;
 
 import com.social.ProfileService.DTOs.CreateProfileRequestDTO;
+import com.social.ProfileService.DTOs.ProfileResponseDTO;
 import com.social.ProfileService.DTOs.UpdateProfileRequestDTO;
 import com.social.ProfileService.Entity.Profile;
 
 public interface ProfileService {
-	
-    Profile createProfile(CreateProfileRequestDTO request);
 
-    Profile getProfile(UUID userId);
+    ProfileResponseDTO createProfile(
+            CreateProfileRequestDTO request
+    );
 
-    Profile updateProfile(UUID userId,
-                          UpdateProfileRequestDTO request);
+    ProfileResponseDTO getProfile(UUID userId);
+    
+    ProfileResponseDTO getProfileByUsername(
+            String username
+    );
 
+    ProfileResponseDTO updateProfile(
+            UUID userId,
+            UpdateProfileRequestDTO request
+    );
 }

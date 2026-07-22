@@ -7,119 +7,143 @@ spring:
 
   cloud:
     gateway:
-      routes:
+      server:
+        webflux:
 
-        # ================= BUSINESS ROUTES =================
+          # ================= CORS =================
 
-        - id: auth-service
-          uri: lb://AUTHSERVICE
-          predicates:
-            - Path=/api/auth/**
+          globalcors:
+            add-to-simple-url-handler-mapping: true
 
-        - id: profile-service
-          uri: lb://PROFILESERVICE
-          predicates:
-            - Path=/api/profiles/**
-          filters:
-            - JwtAuthenticationFilter
+            cors-configurations:
+              '[/**]':
+                allowed-origins:
+                  - "http://localhost:5173"
 
-        - id: social-graph-service
-          uri: lb://SOCIALGRAPHSERVICE
-          predicates:
-            - Path=/api/social/**
-          filters:
-            - JwtAuthenticationFilter
+                allowed-methods:
+                  - GET
+                  - POST
+                  - PUT
+                  - PATCH
+                  - DELETE
+                  - OPTIONS
 
-        - id: post-service
-          uri: lb://POSTSERVICE
-          predicates:
-            - Path=/api/posts/**
-          filters:
-            - JwtAuthenticationFilter
+                allowed-headers:
+                  - "*"
 
-        - id: media-service
-          uri: lb://MEDIASERVICE
-          predicates:
-            - Path=/api/media/**
-          filters:
-            - JwtAuthenticationFilter
+                exposed-headers:
+                  - Authorization
 
-        - id: notification-service
-          uri: lb://NOTIFICATIONSERVICE
-          predicates:
-            - Path=/api/notifications/**
-          filters:
-            - JwtAuthenticationFilter
+                allow-credentials: true
 
-        - id: feed-service
-          uri: lb://FEEDSERVICE
-          predicates:
-            - Path=/api/feed/**
-          filters:
-            - JwtAuthenticationFilter
+          # ================= ROUTES =================
 
-        # ================= SWAGGER DOCS ROUTES =================
+          routes:
 
-        - id: auth-docs
-          uri: lb://AUTHSERVICE
-          predicates:
-            - Path=/authservice/**
+            # ================= BUSINESS ROUTES =================
 
-          filters:
-            - RewritePath=/authservice/(?<segment>.*), /${segment}
+            - id: auth-service
+              uri: lb://AUTHSERVICE
+              predicates:
+                - Path=/api/auth/**
 
-        - id: profile-docs
-          uri: lb://PROFILESERVICE
-          predicates:
-            - Path=/profileservice/**
+            - id: profile-service
+              uri: lb://PROFILESERVICE
+              predicates:
+                - Path=/api/profiles/**
+              filters:
+                - name: JwtAuthenticationFilter
 
-          filters:
-            - RewritePath=/profileservice/(?<segment>.*), /${segment}
+            - id: social-graph-service
+              uri: lb://SOCIALGRAPHSERVICE
+              predicates:
+                - Path=/api/social/**
+              filters:
+                - name: JwtAuthenticationFilter
 
-        - id: socialgraph-docs
-          uri: lb://SOCIALGRAPHSERVICE
-          predicates:
-            - Path=/socialgraphservice/**
+            - id: post-service
+              uri: lb://POSTSERVICE
+              predicates:
+                - Path=/api/posts/**
+              filters:
+                - name: JwtAuthenticationFilter
 
-          filters:
-            - RewritePath=/socialgraphservice/(?<segment>.*), /${segment}
+            - id: media-service
+              uri: lb://MEDIASERVICE
+              predicates:
+                - Path=/api/media/**
+              filters:
+                - name: JwtAuthenticationFilter
 
-        - id: post-docs
-          uri: lb://POSTSERVICE
-          predicates:
-            - Path=/postservice/**
+            - id: notification-service
+              uri: lb://NOTIFICATIONSERVICE
+              predicates:
+                - Path=/api/notifications/**
+              filters:
+                - name: JwtAuthenticationFilter
 
-          filters:
-            - RewritePath=/postservice/(?<segment>.*), /${segment}
+            - id: feed-service
+              uri: lb://FEEDSERVICE
+              predicates:
+                - Path=/api/feed/**
+              filters:
+                - name: JwtAuthenticationFilter
 
-        - id: media-docs
-          uri: lb://MEDIASERVICE
-          predicates:
-            - Path=/mediaservice/**
+            # ================= SWAGGER DOC ROUTES =================
 
-          filters:
-            - RewritePath=/mediaservice/(?<segment>.*), /${segment}
+            - id: auth-docs
+              uri: lb://AUTHSERVICE
+              predicates:
+                - Path=/authservice/**
+              filters:
+                - RewritePath=/authservice/(?<segment>.*), /${segment}
 
-        - id: notification-docs
-          uri: lb://NOTIFICATIONSERVICE
-          predicates:
-            - Path=/notificationservice/**
+            - id: profile-docs
+              uri: lb://PROFILESERVICE
+              predicates:
+                - Path=/profileservice/**
+              filters:
+                - RewritePath=/profileservice/(?<segment>.*), /${segment}
 
-          filters:
-            - RewritePath=/notificationservice/(?<segment>.*), /${segment}
+            - id: socialgraph-docs
+              uri: lb://SOCIALGRAPHSERVICE
+              predicates:
+                - Path=/socialgraphservice/**
+              filters:
+                - RewritePath=/socialgraphservice/(?<segment>.*), /${segment}
 
-        - id: feed-docs
-          uri: lb://FEEDSERVICE
-          predicates:
-            - Path=/feedservice/**
+            - id: post-docs
+              uri: lb://POSTSERVICE
+              predicates:
+                - Path=/postservice/**
+              filters:
+                - RewritePath=/postservice/(?<segment>.*), /${segment}
 
-          filters:
-            - RewritePath=/feedservice/(?<segment>.*), /${segment}
+            - id: media-docs
+              uri: lb://MEDIASERVICE
+              predicates:
+                - Path=/mediaservice/**
+              filters:
+                - RewritePath=/mediaservice/(?<segment>.*), /${segment}
+
+            - id: notification-docs
+              uri: lb://NOTIFICATIONSERVICE
+              predicates:
+                - Path=/notificationservice/**
+              filters:
+                - RewritePath=/notificationservice/(?<segment>.*), /${segment}
+
+            - id: feed-docs
+              uri: lb://FEEDSERVICE
+              predicates:
+                - Path=/feedservice/**
+              filters:
+                - RewritePath=/feedservice/(?<segment>.*), /${segment}
 
 eureka:
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka
+      defaultZone: http://localhost:8761/eureka/
 
 # ================= SWAGGER AGGREGATION =================
 

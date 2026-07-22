@@ -38,6 +38,13 @@ public class AuthController {
 
 		return ResponseEntity.ok("User Registered Successfully");
 	}
+	
+	@PostMapping("/login")
+	public ResponseEntity<AuthResponseDTO> login(
+	        @Valid @RequestBody LoginRequestDTO request) {
+
+	    return ResponseEntity.ok(authService.login(request));
+	}
 
 	@PostMapping("/logout")
 	@PreAuthorize("isAuthenticated()")

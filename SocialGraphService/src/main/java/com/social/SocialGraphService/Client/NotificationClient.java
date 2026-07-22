@@ -4,14 +4,19 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
+import com.social.SocialGraphService.Config.FeignConfig;
 import com.social.SocialGraphService.DTOs.CreateNotificationRequestDTO;
 import com.social.SocialGraphService.DTOs.NotificationResponseDTO;
 
-@FeignClient(name = "notification-service")
+@FeignClient(
+        name = "NOTIFICATIONSERVICE",
+        configuration = FeignConfig.class
+)
 public interface NotificationClient {
 
     @PostMapping("/api/notifications")
     NotificationResponseDTO createNotification(
             @RequestBody
-            CreateNotificationRequestDTO request);
+            CreateNotificationRequestDTO request
+    );
 }

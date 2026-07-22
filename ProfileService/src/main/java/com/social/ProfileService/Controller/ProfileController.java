@@ -9,10 +9,12 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import com.social.ProfileService.DTOs.CreateProfileRequestDTO;
+import com.social.ProfileService.DTOs.ProfileResponseDTO;
 import com.social.ProfileService.DTOs.UpdateProfileRequestDTO;
 import com.social.ProfileService.Entity.Profile;
 import com.social.ProfileService.Service.ProfileService;
 
+import org.springframework.http.HttpStatus;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,39 +24,39 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ProfileController {
 
-    private final ProfileService profileService;
+	private final ProfileService profileService;
 
-    @PostMapping
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Profile> createProfile(
-            @Valid @RequestBody CreateProfileRequestDTO request) {
+	@PostMapping
+	public ResponseEntity<ProfileResponseDTO> createProfile(@Valid @RequestBody CreateProfileRequestDTO request) {
 
-        Profile profile = profileService.createProfile(request);
+		ProfileResponseDTO profile = profileService.createProfile(request);
 
-        return ResponseEntity.ok(profile);
-    }
+		return ResponseEntity.status(HttpStatus.CREATED).body(profile);
+	}
 
-    @GetMapping("/{userId}")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Profile> getProfile(
-            @PathVariable UUID userId) {
+	@GetMapping("/{userId}")
+	@PreAuthorize("isAuthenticated()")
+	public ResponseEntity<ProfileResponseDTO> getProfile(@PathVariable UUID userId) {
 
-        Profile profile = profileService.getProfile(userId);
+		ProfileResponseDTO profile = profileService.getProfile(userId);
 
-        return ResponseEntity.ok(profile);
-    }
+		return ResponseEntity.ok(profile);
+	}
 
-    @PutMapping("/{userId}")
-    @PreAuthorize(
-            "hasRole('ADMIN') "
-          + "or @profileSecurity.isOwner(#userId)")
-    public ResponseEntity<Profile> updateProfile(
-            @PathVariable UUID userId,
-            @Valid @RequestBody UpdateProfileRequestDTO request) {
+	@GetMapping("/username/{username}")
+	@PreAuthorize("isAuthenticated()")
+	public ResponseEntity<ProfileResponseDTO> getProfileByUsername(@PathVariable("username") String username) {
 
-        Profile profile =
-                profileService.updateProfile(userId, request);
+		ProfileResponseDTO response = profileService.getProfileByUsername(username);
 
-        return ResponseEntity.ok(profile);
-    }
+		return ResponseEntity.ok(response);
+	}
+
+	@PutMapping("/{userId}")
+	@PreAuthorize("isAuthenticated()")
+	public ResponseEntity<ProfileResponseDTO> updateProfile(@PathVariable UUID userId,
+			@Valid @RequestBody UpdateProfileRequestDTO request) {
+
+		return ResponseEntity.ok(profileService.updateProfile(userId, request));
+	}
 }

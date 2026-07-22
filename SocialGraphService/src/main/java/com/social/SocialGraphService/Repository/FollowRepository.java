@@ -10,19 +10,15 @@ import com.social.SocialGraphService.Entity.Follow;
 
 public interface FollowRepository extends JpaRepository<Follow, UUID> {
 
-	boolean existsByFollowerIdAndFollowingId(UUID followerId, UUID followingId);
-
-	Optional<Follow> findByFollowerIdAndFollowingId(UUID followerId, UUID followingId);
-
-	List<Follow> findByFollowerId(UUID followerId);
-
-	List<Follow> findByFollowingId(UUID followingId);
-
-	long countByFollowerId(UUID followerId);
-
-	long countByFollowingId(UUID followingId);
-
 	boolean existsByFollowerIdAndFollowedUserId(UUID followerId, UUID followedUserId);
 
 	Optional<Follow> findByFollowerIdAndFollowedUserId(UUID followerId, UUID followedUserId);
+
+	List<Follow> findByFollowedUserId(UUID followedUserId);
+
+	List<Follow> findByFollowerId(UUID followerId);
+
+	long countByFollowedUserId(UUID followedUserId);
+
+	long countByFollowerId(UUID followerId);
 }

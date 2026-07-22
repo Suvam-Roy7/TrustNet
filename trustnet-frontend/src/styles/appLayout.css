@@ -1,0 +1,247 @@
+.trustnet-page-layout {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 275px minmax(0, 1fr);
+  background: #f8f4f1;
+}
+
+.trustnet-page-content {
+  min-width: 0;
+}
+
+.trustnet-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  padding: 28px 20px 22px;
+  display: flex;
+  flex-direction: column;
+  color: #fff8f5;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(173, 40, 49, 0.2), transparent 27%),
+    linear-gradient(180deg, #38040e, #250902);
+  box-shadow: 10px 0 35px rgba(37, 9, 2, 0.08);
+}
+
+.trustnet-sidebar-brand {
+  padding: 6px 10px 29px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.trustnet-brand-icon {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  background: #ad2831;
+  border-radius: 15px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+}
+
+.trustnet-sidebar-brand > div:last-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.trustnet-sidebar-brand strong {
+  color: #ffffff;
+  font-size: 22px;
+  letter-spacing: -0.4px;
+}
+
+.trustnet-sidebar-brand span {
+  color: rgba(255, 248, 245, 0.62);
+  font-size: 10px;
+}
+
+.trustnet-sidebar-navigation {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.trustnet-sidebar-item {
+  min-height: 52px;
+  padding: 0 17px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: rgba(255, 248, 245, 0.72);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 750;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    color 180ms ease,
+    background 180ms ease,
+    border-color 180ms ease,
+    transform 180ms ease;
+}
+
+.trustnet-sidebar-item:hover:not(.trustnet-sidebar-disabled) {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.065);
+  transform: translateX(2px);
+}
+
+.trustnet-sidebar-active {
+  color: #ffffff;
+  background: linear-gradient(
+    100deg,
+    rgba(173, 40, 49, 0.48),
+    rgba(128, 14, 19, 0.58)
+  );
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.13);
+}
+
+.trustnet-sidebar-disabled {
+  width: 100%;
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.trustnet-sidebar-user {
+  margin-top: auto;
+  padding: 15px;
+  display: grid;
+  grid-template-columns: 43px minmax(0, 1fr) 35px;
+  align-items: center;
+  gap: 11px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+}
+
+.trustnet-sidebar-avatar {
+  width: 43px;
+  height: 43px;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  background: #ad2831;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.trustnet-sidebar-user-details {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.trustnet-sidebar-user-details strong {
+  overflow: hidden;
+  color: #ffffff;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trustnet-sidebar-user-details span {
+  color: rgba(255, 248, 245, 0.53);
+  font-size: 9px;
+}
+
+.trustnet-sidebar-user > button {
+  width: 35px;
+  height: 35px;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 248, 245, 0.68);
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+  transition:
+    color 180ms ease,
+    background 180ms ease;
+}
+
+.trustnet-sidebar-user > button:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.09);
+}
+
+@media (max-width: 980px) {
+  .trustnet-page-layout {
+    grid-template-columns: 88px minmax(0, 1fr);
+  }
+
+  .trustnet-sidebar {
+    padding-inline: 13px;
+  }
+
+  .trustnet-sidebar-brand {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .trustnet-sidebar-brand > div:last-child,
+  .trustnet-sidebar-item span,
+  .trustnet-sidebar-user-details {
+    display: none;
+  }
+
+  .trustnet-sidebar-item {
+    padding: 0;
+    justify-content: center;
+  }
+
+  .trustnet-sidebar-user {
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 700px) {
+  .trustnet-page-layout {
+    display: block;
+    padding-bottom: 74px;
+  }
+
+  .trustnet-sidebar {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 900;
+    width: 100%;
+    height: 68px;
+    padding: 8px 12px;
+    display: block;
+    background: rgba(56, 4, 14, 0.97);
+    backdrop-filter: blur(18px);
+  }
+
+  .trustnet-sidebar-brand,
+  .trustnet-sidebar-user {
+    display: none;
+  }
+
+  .trustnet-sidebar-navigation {
+    height: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 7px;
+  }
+
+  .trustnet-sidebar-item {
+    min-height: 50px;
+    justify-content: center;
+  }
+
+  .trustnet-sidebar-item:nth-child(n + 4) {
+    display: none;
+  }
+}

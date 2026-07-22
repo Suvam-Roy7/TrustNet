@@ -2,37 +2,62 @@ package com.social.SocialGraphService.Config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import feign.RequestInterceptor;
+import jakarta.servlet.http.HttpServletRequest;
 
 @Configuration
 public class FeignConfig {
 
-    @Bean
-    public RequestInterceptor jwtInterceptor() {
+    private static final String USER_ID_HEADER =
+            "X-User-Id";
 
-        return template -> {
+    @Bean
+    public RequestInterceptor requestInterceptor() {
+
+        return requestTemplate -> {
 
             ServletRequestAttributes attributes =
                     (ServletRequestAttributes)
                             RequestContextHolder
                                     .getRequestAttributes();
 
-            if (attributes != null) {
+            if (attributes == null) {
+                return;
+            }
 
-                String authHeader =
-                        attributes
-                                .getRequest()
-                                .getHeader("Authorization");
+            HttpServletRequest incomingRequest =
+                    attributes.getRequest();
 
-                if (authHeader != null) {
+            String authorization =
+                    incomingRequest.getHeader(
+                            HttpHeaders.AUTHORIZATION
+                    );
 
-                    template.header(
-                            "Authorization",
-                            authHeader);
-                }
+            String userId =
+                    incomingRequest.getHeader(
+                            USER_ID_HEADER
+                    );
+
+            if (authorization != null
+                    && !authorization.isBlank()) {
+
+                requestTemplate.header(
+                        HttpHeaders.AUTHORIZATION,
+                        authorization
+                );
+            }
+
+            if (userId != null
+                    && !userId.isBlank()) {
+
+                requestTemplate.header(
+                        USER_ID_HEADER,
+                        userId
+                );
             }
         };
     }

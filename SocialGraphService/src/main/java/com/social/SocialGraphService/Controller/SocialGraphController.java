@@ -3,13 +3,23 @@ package com.social.SocialGraphService.Controller;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import com.social.SocialGraphService.DTOs.FollowRequestDTO;
+import com.social.SocialGraphService.DTOs.FollowRequestResponseDTO;
 import com.social.SocialGraphService.DTOs.FollowResponseDTO;
-import com.social.SocialGraphService.DTOs.SocialStatsDTO;
+import com.social.SocialGraphService.DTOs.RelationshipStatusResponseDTO;
+import com.social.SocialGraphService.DTOs.SendFollowRequestDTO;
+import com.social.SocialGraphService.DTOs.SocialSummaryResponseDTO;
 import com.social.SocialGraphService.Service.SocialGraphService;
 
 import jakarta.validation.Valid;
@@ -20,53 +30,98 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class SocialGraphController {
 
-    private final SocialGraphService service;
+	private final SocialGraphService service;
 
-    @PostMapping("/follow")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<FollowResponseDTO> follow(
-            @Valid @RequestBody FollowRequestDTO request) {
+	/*
+	 * Old direct-follow endpoint. Keep temporarily only if unfollow/testing still
+	 * requires it. The frontend should not call this for new requests.
+	 */
+	@PostMapping("/follow")
+	@PreAuthorize("isAuthenticated()")
+	public ResponseEntity<FollowResponseDTO> follow(@RequestHeader("X-User-Id") UUID followerId,
 
-        FollowResponseDTO response =
-                service.follow(request.getFollowedUserId());
+			@Valid @RequestBody FollowRequestDTO request) {
 
-        return ResponseEntity.ok(response);
-    }
+		FollowResponseDTO response = service.follow(followerId, request.getFollowedUserId());
 
-    @PostMapping("/unfollow")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Void> unfollow(
-            @Valid @RequestBody FollowRequestDTO request) {
+		return ResponseEntity.ok(response);
+	}
 
-        service.unfollow(request);
+	@PostMapping("/unfollow")
+	@PreAuthorize("isAuthenticated()")
+	public ResponseEntity<Void> unfollow(@RequestHeader("X-User-Id") UUID followerId,
 
-        return ResponseEntity.ok().build();
-    }
+			@Valid @RequestBody FollowRequestDTO request) {
 
-    @GetMapping("/followers/{userId}")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<UUID>> followers(
-            @PathVariable UUID userId) {
+		service.unfollow(followerId, request.getFollowedUserId());
 
-        return ResponseEntity.ok(
-                service.getFollowers(userId));
-    }
+		return ResponseEntity.noContent().build();
+	}
 
-    @GetMapping("/following/{userId}")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<UUID>> following(
-            @PathVariable UUID userId) {
+	/*
+	 * Create a pending follow request.
+	 */
+	@PostMapping("/follow-requests")
+	@PreAuthorize("isAuthenticated()")
+	public ResponseEntity<FollowRequestResponseDTO> sendFollowRequest(@RequestHeader("X-User-Id") UUID requesterId,
 
-        return ResponseEntity.ok(
-                service.getFollowing(userId));
-    }
+			@Valid @RequestBody SendFollowRequestDTO request) {
 
-    @GetMapping("/stats/{userId}")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<SocialStatsDTO> stats(
-            @PathVariable UUID userId) {
+		FollowRequestResponseDTO response = service.sendFollowRequest(requesterId, request.getReceiverId());
 
-        return ResponseEntity.ok(
-                service.getStats(userId));
-    }
+		return ResponseEntity.status(HttpStatus.CREATED).body(response);
+	}
+
+	/*
+	 * Get requests received by the logged-in user.
+	 */
+	@GetMapping("/follow-requests/incoming")
+	@PreAuthorize("isAuthenticated()")
+	public ResponseEntity<List<FollowRequestResponseDTO>> getIncomingFollowRequests(
+			@RequestHeader("X-User-Id") UUID receiverId) {
+
+		return ResponseEntity.ok(service.getIncomingFollowRequests(receiverId));
+	}
+
+	@PostMapping("/follow-requests/{requestId}/accept")
+	@PreAuthorize("isAuthenticated()")
+	public ResponseEntity<FollowRequestResponseDTO> acceptFollowRequest(@RequestHeader("X-User-Id") UUID receiverId,
+
+			@PathVariable("requestId") UUID requestId) {
+
+		return ResponseEntity.ok(service.acceptFollowRequest(receiverId, requestId));
+	}
+
+	@PostMapping("/follow-requests/{requestId}/reject")
+	@PreAuthorize("isAuthenticated()")
+	public ResponseEntity<FollowRequestResponseDTO> rejectFollowRequest(@RequestHeader("X-User-Id") UUID receiverId,
+
+			@PathVariable("requestId") UUID requestId) {
+
+		return ResponseEntity.ok(service.rejectFollowRequest(receiverId, requestId));
+	}
+
+	@GetMapping("/follow-requests/{receiverId}/status")
+	@PreAuthorize("isAuthenticated()")
+	public ResponseEntity<RelationshipStatusResponseDTO> getRelationshipStatus(
+			@RequestHeader("X-User-Id") UUID requesterId,
+
+			@PathVariable("receiverId") UUID receiverId) {
+
+		return ResponseEntity.ok(service.getRelationshipStatus(requesterId, receiverId));
+	}
+
+	@GetMapping("/summary")
+	@PreAuthorize("isAuthenticated()")
+	public ResponseEntity<SocialSummaryResponseDTO> getSocialSummary(@RequestHeader("X-User-Id") UUID userId) {
+
+		return ResponseEntity.ok(service.getSocialSummary(userId));
+	}
+
+	@GetMapping("/following")
+	@PreAuthorize("isAuthenticated()")
+	public ResponseEntity<List<UUID>> getFollowingUsers(@RequestHeader("X-User-Id") UUID userId) {
+
+		return ResponseEntity.ok(service.getFollowing(userId));
+	}
 }

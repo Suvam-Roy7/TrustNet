@@ -22,14 +22,16 @@ public class PostDeletedEventConsumer {
 
 		log.info("Received POST_DELETED event. eventId={}, postId={}", event.eventId(), event.postId());
 
-		long deletedRecords = feedPostRepository.deleteByPostId(event.postId());
+		boolean postExists = feedPostRepository.existsById(event.postId());
 
-		if (deletedRecords == 0) {
+		if (!postExists) {
 
 			log.info("Feed post was already absent. postId={}", event.postId());
 
 			return;
 		}
+
+		feedPostRepository.deleteById(event.postId());
 
 		log.info("Post removed from FeedService. postId={}", event.postId());
 	}

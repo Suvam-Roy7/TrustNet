@@ -1,6 +1,5 @@
 package com.social.AuthService.Config;
 
-
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -13,44 +12,27 @@ import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
 public class SecurityConfig {
-	
+
 	@Bean
-	public SecurityFilterChain
-	securityFilterChain(
-	        HttpSecurity http)
-	        throws Exception {
+	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
-	    return http
-	            .csrf(csrf -> csrf.disable())
-	            .sessionManagement(
-	                    session -> session
-	                        .sessionCreationPolicy(
-	                            SessionCreationPolicy.STATELESS))
-	            .authorizeHttpRequests(auth -> auth
-	                    .requestMatchers(
-	                            "/api/auth/**",
-	                            "/swagger-ui/**",
-	                            "/v3/api-docs/**")
-	                    .permitAll()
-	                    .anyRequest()
-	                    .authenticated())
+		return http.csrf(csrf -> csrf.disable())
+				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+				.authorizeHttpRequests(auth -> auth.requestMatchers("/api/auth/**", "/swagger-ui/**", "/v3/api-docs/**")
+						.permitAll().anyRequest().authenticated())
 
-	            .build();
+				.build();
 	}
 
-    @Bean
-    public PasswordEncoder passwordEncoder() {
+	@Bean
+	public PasswordEncoder passwordEncoder() {
 
-        return new BCryptPasswordEncoder();
-    }
-    
-    @Bean
-    public AuthenticationManager
-    authenticationManager(
-            AuthenticationConfiguration configuration)
-            throws Exception {
+		return new BCryptPasswordEncoder();
+	}
 
-        return configuration
-                .getAuthenticationManager();
-    }
+	@Bean
+	public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
+
+		return configuration.getAuthenticationManager();
+	}
 }

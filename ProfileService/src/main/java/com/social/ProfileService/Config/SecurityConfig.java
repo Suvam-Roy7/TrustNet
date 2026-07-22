@@ -1,6 +1,7 @@
 package com.social.ProfileService.Config;
 
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpMethod;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -22,24 +23,16 @@ public class SecurityConfig {
 	@Bean
 	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
-		return http
-
-				.csrf(csrf -> csrf.disable())
-
+		return http.csrf(csrf -> csrf.disable())
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-
 				.authorizeHttpRequests(auth -> auth
 
-						.requestMatchers("/swagger-ui/**", "/v3/api-docs/**")
+						// AuthService creates the profile during registration
+						.requestMatchers(HttpMethod.POST, "/api/profiles").permitAll()
 
-						.permitAll()
+						.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 
-						.anyRequest()
-
-						.authenticated())
-
-				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-
-				.build();
+						.anyRequest().authenticated())
+				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class).build();
 	}
 }

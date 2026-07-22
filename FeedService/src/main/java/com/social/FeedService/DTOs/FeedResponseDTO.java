@@ -1,26 +1,29 @@
 package com.social.FeedService.DTOs;
 
-import java.time.LocalDateTime;
-import java.util.UUID;
+import java.util.List;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class FeedResponseDTO {
 
-    private UUID postId;
+    private List<FeedPostResponseDTO> content;
 
-    private UUID userId;
+    private int page;
 
-    private String username;
+    private int size;
 
-    private String content;
+    private boolean hasMore;
 
-    private Long likeCount;
+    private int followingPostCount;
 
-    private Long commentCount;
+    private int ownPostCount;
 
-    private LocalDateTime createdAt;
+    private int suggestedPostCount;
 }

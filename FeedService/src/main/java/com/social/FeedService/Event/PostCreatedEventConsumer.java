@@ -23,15 +23,28 @@ public class PostCreatedEventConsumer {
 
 		log.info("Received POST_CREATED event. eventId={}, postId={}", event.eventId(), event.postId());
 
-		if (feedPostRepository.existsByEventId(event.eventId()) || feedPostRepository.existsByPostId(event.postId())) {
+		boolean eventAlreadyProcessed = feedPostRepository.existsByEventId(event.eventId());
 
-			log.info("Duplicate POST_CREATED event ignored. eventId={}", event.eventId());
+		boolean postAlreadyExists = feedPostRepository.existsById(event.postId());
+
+		if (eventAlreadyProcessed || postAlreadyExists) {
+
+			log.info("Duplicate POST_CREATED event ignored. " + "eventId={}, postId={}", event.eventId(),
+					event.postId());
 
 			return;
 		}
 
 		FeedPost feedPost = FeedPost.builder().eventId(event.eventId()).postId(event.postId())
-				.authorId(event.authorId()).content(event.content()).createdAt(event.createdAt()) .updatedAt(event.createdAt()).build();
+				.authorId(event.authorId())
+
+				/*
+				 * Keep null until authorUsername is included in PostCreatedEvent.
+				 */
+				.authorUsername(null)
+
+				.content(event.content()).likeCount(0L).commentCount(0L).createdAt(event.createdAt())
+				.updatedAt(event.createdAt()).build();
 
 		feedPostRepository.save(feedPost);
 

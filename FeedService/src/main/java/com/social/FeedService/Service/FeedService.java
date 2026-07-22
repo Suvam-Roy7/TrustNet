@@ -2,14 +2,13 @@ package com.social.FeedService.Service;
 
 import java.util.UUID;
 
-import com.social.FeedService.DTOs.FeedPostResponseDTO;
-import org.springframework.data.domain.Page;
-
+import com.social.FeedService.DTOs.FeedResponseDTO;
 
 public interface FeedService {
 
-	Page<FeedPostResponseDTO> getFeed(
+    FeedResponseDTO getFeed(
+            UUID userId,
             int page,
-            int size);
-
+            int size
+    );
 }
