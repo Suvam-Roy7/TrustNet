@@ -1,12 +1,16 @@
-import { useNavigate } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 
 import {
   Bell,
   Bookmark,
+  Check,
+  ChevronRight,
+  Clock3,
   Heart,
   Home,
   Image,
+  LoaderCircle,
   LogOut,
   MessageCircle,
   MoreHorizontal,
@@ -15,6 +19,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  UserPlus,
   UserRound,
   Users,
   X,
@@ -24,15 +29,21 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import "../styles/home.css";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getProfileByUserIdRequest } from "../api/profileApi";
+import axiosInstance from "../api/axiosInstance";
 import tokenService from "../auth/tokenService";
 
 import { toast } from "react-toastify";
 import { createPostRequest } from "../api/postApi";
 import { getHomeFeedRequest } from "../api/feedApi";
-
-import { NavLink } from "react-router-dom";
+import {
+  acceptFollowRequestRequest,
+  getIncomingFollowRequestsRequest,
+  getRelationshipStatusRequest,
+  rejectFollowRequestRequest,
+  sendFollowRequest,
+} from "../api/socialApi";
 
 const getInitials = (name) => {
   if (!name?.trim()) {
@@ -47,6 +58,101 @@ const getInitials = (name) => {
     .slice(0, 2)
     .map((word) => word.charAt(0).toUpperCase())
     .join("");
+};
+
+const extractList = (response) => {
+  const payload = response?.data ?? response;
+
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (Array.isArray(payload?.content)) {
+    return payload.content;
+  }
+
+  if (Array.isArray(payload?.notifications)) {
+    return payload.notifications;
+  }
+
+  if (Array.isArray(payload?.requests)) {
+    return payload.requests;
+  }
+
+  return [];
+};
+
+const normalizeProfile = (profile) => {
+  const profileData = profile?.data ?? profile;
+
+  if (!profileData) {
+    return null;
+  }
+
+  return {
+    userId:
+      profileData.userId || profileData.id || profileData.profileId || null,
+    username:
+      profileData.username ||
+      profileData.userName ||
+      profileData.displayName ||
+      "TrustNet User",
+    bio: profileData.bio || "",
+    trustLevel: profileData.trustLevel || profileData.trust_level || "NEW_USER",
+    profilePictureUrl:
+      profileData.profilePictureUrl ||
+      profileData.profileImageUrl ||
+      profileData.avatarUrl ||
+      null,
+  };
+};
+
+const formatNotificationTime = (value) => {
+  if (!value) {
+    return "Recently";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Recently";
+  }
+
+  const difference = Date.now() - date.getTime();
+  const minutes = Math.max(0, Math.floor(difference / 60000));
+
+  if (minutes < 1) {
+    return "Just now";
+  }
+
+  if (minutes < 60) {
+    return `${minutes}m ago`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+
+  if (hours < 24) {
+    return `${hours}h ago`;
+  }
+
+  const days = Math.floor(hours / 24);
+
+  if (days < 7) {
+    return `${days}d ago`;
+  }
+
+  return date.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+  });
+};
+
+const isPendingRelationship = (response) => {
+  const payload = response?.data ?? response;
+
+  return (
+    payload?.requestPending === true || payload?.requestStatus === "PENDING"
+  );
 };
 
 function HomePage() {
@@ -74,6 +180,19 @@ function HomePage() {
     suggestedPostCount: 0,
   });
   const [isProfileLoading, setIsProfileLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] =
+    useState(false);
+  const [notificationTab, setNotificationTab] = useState("NOTIFICATIONS");
+  const [activityNotifications, setActivityNotifications] = useState([]);
+  const [connectionRequests, setConnectionRequests] = useState([]);
+  const [isNotificationCenterLoading, setIsNotificationCenterLoading] =
+    useState(true);
+  const [notificationCenterError, setNotificationCenterError] = useState("");
+  const [processingRequestId, setProcessingRequestId] = useState(null);
+  const [markingNotificationId, setMarkingNotificationId] = useState(null);
+  const notificationCenterRef = useRef(null);
 
   const userId = tokenService.getCurrentUserId();
   const email = tokenService.getCurrentEmail();
@@ -114,6 +233,160 @@ function HomePage() {
 
     loadCurrentProfile();
   }, [userId]);
+
+  const loadNotificationCenter = useCallback(async () => {
+    setIsNotificationCenterLoading(true);
+    setNotificationCenterError("");
+
+    try {
+      const [notificationsResult, requestsResult] = await Promise.allSettled([
+        axiosInstance.get("/api/notifications", {
+          params: {
+            page: 0,
+            size: 8,
+          },
+        }),
+        getIncomingFollowRequestsRequest(),
+      ]);
+
+      if (notificationsResult.status === "fulfilled") {
+        const notificationList = extractList(notificationsResult.value).filter(
+          (notification) => notification?.type !== "FOLLOW_REQUEST",
+        );
+
+        const enrichedNotifications = await Promise.all(
+          notificationList.map(async (notification) => {
+            const actorUserId =
+              notification.actorUserId ||
+              notification.actorId ||
+              notification.senderUserId ||
+              null;
+
+            if (!actorUserId) {
+              return notification;
+            }
+
+            try {
+              const actorProfileResponse =
+                await getProfileByUserIdRequest(actorUserId);
+
+              return {
+                ...notification,
+                actorProfile: normalizeProfile(actorProfileResponse),
+              };
+            } catch (profileError) {
+              console.error(
+                "Unable to load notification actor profile:",
+                actorUserId,
+                profileError.response?.status,
+              );
+
+              return notification;
+            }
+          }),
+        );
+
+        setActivityNotifications(enrichedNotifications);
+      } else {
+        console.error(
+          "Unable to load notifications:",
+          notificationsResult.reason,
+        );
+        setActivityNotifications([]);
+      }
+
+      if (requestsResult.status === "fulfilled") {
+        const rawRequests = extractList(requestsResult.value);
+        const enrichedRequests = await Promise.all(
+          rawRequests.map(async (request) => {
+            try {
+              const requesterProfileResponse = await getProfileByUserIdRequest(
+                request.requesterId,
+              );
+
+              return {
+                ...request,
+                requesterProfile: normalizeProfile(requesterProfileResponse),
+              };
+            } catch (profileError) {
+              console.error(
+                "Unable to load request profile:",
+                request.requesterId,
+                profileError.response?.status,
+              );
+
+              return {
+                ...request,
+                requesterProfile: {
+                  userId: request.requesterId,
+                  username: "TrustNet User",
+                  bio: "",
+                  trustLevel: "NEW_USER",
+                  profilePictureUrl: null,
+                },
+              };
+            }
+          }),
+        );
+
+        setConnectionRequests(enrichedRequests);
+      } else {
+        console.error(
+          "Unable to load connection requests:",
+          requestsResult.reason,
+        );
+        setConnectionRequests([]);
+      }
+
+      if (
+        notificationsResult.status === "rejected" &&
+        requestsResult.status === "rejected"
+      ) {
+        setNotificationCenterError(
+          "Unable to load your notifications right now.",
+        );
+      }
+    } catch (error) {
+      console.error(
+        "Unable to load notification centre:",
+        error.response?.data || error.message,
+      );
+      setNotificationCenterError(
+        "Unable to load your notifications right now.",
+      );
+    } finally {
+      setIsNotificationCenterLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadNotificationCenter();
+  }, [loadNotificationCenter]);
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (
+        notificationCenterRef.current &&
+        !notificationCenterRef.current.contains(event.target)
+      ) {
+        setIsNotificationCenterOpen(false);
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setIsNotificationCenterOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
 
   const loadHomeFeed = useCallback(
     async (pageNumber = 0, replacePosts = true) => {
@@ -211,6 +484,26 @@ function HomePage() {
       .replace(/\b\w/g, (letter) => letter.toUpperCase());
   }, [profile]);
 
+  const unreadActivityCount = useMemo(
+    () =>
+      activityNotifications.filter(
+        (notification) =>
+          notification?.isRead !== true && notification?.read !== true,
+      ).length,
+    [activityNotifications],
+  );
+
+  const requestAttentionCount = useMemo(
+    () =>
+      connectionRequests.filter(
+        (request) =>
+          request.uiStatus !== "ACCEPTED" || request.followBackPending !== true,
+      ).length,
+    [connectionRequests],
+  );
+
+  const bellCount = unreadActivityCount + requestAttentionCount;
+
   const handleCreatePost = async (event) => {
     event.preventDefault();
 
@@ -297,6 +590,240 @@ function HomePage() {
     }
   };
 
+  const toggleNotificationCenter = () => {
+    setIsNotificationCenterOpen((currentValue) => !currentValue);
+  };
+
+  const handleNotificationRead = async (notification) => {
+    const notificationId = notification.notificationId || notification.id;
+    const alreadyRead =
+      notification.isRead === true || notification.read === true;
+
+    if (!notificationId || alreadyRead || markingNotificationId) {
+      return;
+    }
+
+    setMarkingNotificationId(notificationId);
+
+    try {
+      await axiosInstance.patch(`/api/notifications/${notificationId}/read`);
+
+      setActivityNotifications((currentNotifications) =>
+        currentNotifications.map((item) => {
+          const itemId = item.notificationId || item.id;
+
+          return itemId === notificationId
+            ? {
+                ...item,
+                isRead: true,
+                read: true,
+              }
+            : item;
+        }),
+      );
+    } catch (error) {
+      console.error(
+        "Unable to mark notification as read:",
+        error.response?.data || error.message,
+      );
+      toast.error("Unable to update this notification.");
+    } finally {
+      setMarkingNotificationId(null);
+    }
+  };
+
+  const handleAcceptRequest = async (request) => {
+    if (!request?.requestId || !request?.requesterId || processingRequestId) {
+      return;
+    }
+
+    setProcessingRequestId(request.requestId);
+
+    try {
+      await acceptFollowRequestRequest(request.requestId);
+
+      let relationshipStatus = null;
+
+      try {
+        relationshipStatus = await getRelationshipStatusRequest(
+          request.requesterId,
+        );
+      } catch (statusError) {
+        console.error(
+          "Unable to check follow-back status:",
+          statusError.response?.data || statusError.message,
+        );
+      }
+
+      const relationshipPayload =
+        relationshipStatus?.data ?? relationshipStatus;
+      const alreadyFollowingRequester = relationshipPayload?.following === true;
+      const reverseRequestPending = isPendingRelationship(relationshipPayload);
+
+      if (alreadyFollowingRequester) {
+        setConnectionRequests((currentRequests) =>
+          currentRequests.filter(
+            (item) => item.requestId !== request.requestId,
+          ),
+        );
+
+        toast.success(
+          `You accepted ${
+            request.requesterProfile?.username || "the user"
+          }. You now follow each other.`,
+        );
+
+        return;
+      }
+
+      setConnectionRequests((currentRequests) =>
+        currentRequests.map((item) =>
+          item.requestId === request.requestId
+            ? {
+                ...item,
+                uiStatus: "ACCEPTED",
+                followBackPending: reverseRequestPending,
+              }
+            : item,
+        ),
+      );
+
+      toast.success(
+        `You accepted ${
+          request.requesterProfile?.username || "the user"
+        }'s follow request.`,
+      );
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message ||
+          error.response?.data?.error ||
+          "Unable to accept this request.",
+      );
+    } finally {
+      setProcessingRequestId(null);
+    }
+  };
+
+  const handleRejectRequest = async (request) => {
+    if (!request?.requestId || processingRequestId) {
+      return;
+    }
+
+    setProcessingRequestId(request.requestId);
+
+    try {
+      await rejectFollowRequestRequest(request.requestId);
+
+      setConnectionRequests((currentRequests) =>
+        currentRequests.filter((item) => item.requestId !== request.requestId),
+      );
+
+      toast.info("Follow request declined.");
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message ||
+          error.response?.data?.error ||
+          "Unable to decline this request.",
+      );
+    } finally {
+      setProcessingRequestId(null);
+    }
+  };
+
+  const handleFollowBack = async (request) => {
+    if (
+      !request?.requesterId ||
+      processingRequestId ||
+      request.followBackPending
+    ) {
+      return;
+    }
+
+    setProcessingRequestId(request.requestId);
+
+    try {
+      const relationshipStatus = await getRelationshipStatusRequest(
+        request.requesterId,
+      );
+      const relationshipPayload =
+        relationshipStatus?.data ?? relationshipStatus;
+
+      if (relationshipPayload?.following === true) {
+        setConnectionRequests((currentRequests) =>
+          currentRequests.filter(
+            (item) => item.requestId !== request.requestId,
+          ),
+        );
+
+        toast.info("You already follow this user.");
+        return;
+      }
+
+      if (isPendingRelationship(relationshipPayload)) {
+        setConnectionRequests((currentRequests) =>
+          currentRequests.map((item) =>
+            item.requestId === request.requestId
+              ? {
+                  ...item,
+                  followBackPending: true,
+                }
+              : item,
+          ),
+        );
+
+        toast.info("Your follow-back request is already pending.");
+        return;
+      }
+
+      await sendFollowRequest(request.requesterId);
+
+      setConnectionRequests((currentRequests) =>
+        currentRequests.map((item) =>
+          item.requestId === request.requestId
+            ? {
+                ...item,
+                followBackPending: true,
+              }
+            : item,
+        ),
+      );
+
+      toast.success(
+        `Follow-back request sent to ${
+          request.requesterProfile?.username || "the user"
+        }.`,
+      );
+    } catch (error) {
+      const errorMessage =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        "Unable to send the follow-back request.";
+      const alreadyExists =
+        error.response?.status === 409 ||
+        errorMessage.toLowerCase().includes("already") ||
+        errorMessage.toLowerCase().includes("pending");
+
+      if (alreadyExists) {
+        setConnectionRequests((currentRequests) =>
+          currentRequests.map((item) =>
+            item.requestId === request.requestId
+              ? {
+                  ...item,
+                  followBackPending: true,
+                }
+              : item,
+          ),
+        );
+
+        toast.info("Your follow-back request is already pending.");
+      } else {
+        toast.error(errorMessage);
+      }
+    } finally {
+      setProcessingRequestId(null);
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await logout();
@@ -339,13 +866,6 @@ function HomePage() {
               <Users size={22} />
               <span>Connections</span>
             </NavLink>
-
-            <button className="navigation-item" type="button">
-              <Bell size={21} />
-              <span>Notifications</span>
-
-              <span className="notification-count">3</span>
-            </button>
 
             <button className="navigation-item" type="button">
               <Bookmark size={21} />
@@ -401,14 +921,303 @@ function HomePage() {
               />
             </div>
 
-            <button
-              className="topbar-icon-button"
-              type="button"
-              aria-label="Notifications"
+            <div
+              className="notification-center-shell"
+              ref={notificationCenterRef}
             >
-              <Bell size={21} />
-              <span className="topbar-notification-dot" />
-            </button>
+              <button
+                className={`topbar-icon-button ${
+                  isNotificationCenterOpen ? "is-active" : ""
+                }`}
+                type="button"
+                aria-label="Open notification centre"
+                aria-expanded={isNotificationCenterOpen}
+                onClick={toggleNotificationCenter}
+              >
+                <Bell size={21} />
+
+                {bellCount > 0 && (
+                  <span className="topbar-notification-count">
+                    {bellCount > 99 ? "99+" : bellCount}
+                  </span>
+                )}
+              </button>
+
+              {isNotificationCenterOpen && (
+                <motion.section
+                  className="notification-center-popover"
+                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                >
+                  <header className="notification-center-header">
+                    <div>
+                      <span>Your updates</span>
+                      <h2>Notification centre</h2>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsNotificationCenterOpen(false)}
+                      aria-label="Close notification centre"
+                    >
+                      <X size={19} />
+                    </button>
+                  </header>
+
+                  <div className="notification-center-tabs" role="tablist">
+                    <button
+                      className={
+                        notificationTab === "NOTIFICATIONS" ? "active" : ""
+                      }
+                      type="button"
+                      role="tab"
+                      onClick={() => setNotificationTab("NOTIFICATIONS")}
+                    >
+                      <Bell size={16} />
+                      Notifications
+                      {unreadActivityCount > 0 && (
+                        <span>{unreadActivityCount}</span>
+                      )}
+                    </button>
+
+                    <button
+                      className={notificationTab === "REQUESTS" ? "active" : ""}
+                      type="button"
+                      role="tab"
+                      onClick={() => setNotificationTab("REQUESTS")}
+                    >
+                      <Users size={16} />
+                      Requests
+                      {connectionRequests.length > 0 && (
+                        <span>{connectionRequests.length}</span>
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="notification-center-body">
+                    {isNotificationCenterLoading && (
+                      <div className="notification-center-status">
+                        <LoaderCircle
+                          className="notification-spinner"
+                          size={22}
+                        />
+                        <span>Loading your updates...</span>
+                      </div>
+                    )}
+
+                    {!isNotificationCenterLoading &&
+                      notificationCenterError && (
+                        <div className="notification-center-status is-error">
+                          <span>{notificationCenterError}</span>
+                          <button
+                            type="button"
+                            onClick={loadNotificationCenter}
+                          >
+                            Try again
+                          </button>
+                        </div>
+                      )}
+
+                    {!isNotificationCenterLoading &&
+                      !notificationCenterError &&
+                      notificationTab === "NOTIFICATIONS" && (
+                        <div className="notification-activity-list">
+                          {activityNotifications.length === 0 ? (
+                            <div className="notification-center-empty">
+                              <Bell size={23} />
+                              <strong>No new notifications</strong>
+                              <p>Your meaningful activity will appear here.</p>
+                            </div>
+                          ) : (
+                            activityNotifications.map((notification) => {
+                              const notificationId =
+                                notification.notificationId || notification.id;
+                              const actorName =
+                                notification.actorProfile?.username ||
+                                "TrustNet user";
+                              const isRead =
+                                notification.isRead === true ||
+                                notification.read === true;
+
+                              return (
+                                <button
+                                  className={`notification-activity-item ${
+                                    isRead ? "is-read" : "is-unread"
+                                  }`}
+                                  type="button"
+                                  key={notificationId}
+                                  disabled={
+                                    markingNotificationId === notificationId
+                                  }
+                                  onClick={() =>
+                                    handleNotificationRead(notification)
+                                  }
+                                >
+                                  <div className="notification-item-avatar">
+                                    {notification.actorProfile
+                                      ?.profilePictureUrl ? (
+                                      <img
+                                        src={
+                                          notification.actorProfile
+                                            .profilePictureUrl
+                                        }
+                                        alt={actorName}
+                                      />
+                                    ) : (
+                                      getInitials(actorName)
+                                    )}
+                                  </div>
+
+                                  <div className="notification-item-copy">
+                                    <p>
+                                      <strong>{actorName}</strong>{" "}
+                                      {notification.message ||
+                                        "shared an update with you."}
+                                    </p>
+                                    <span>
+                                      <Clock3 size={12} />
+                                      {formatNotificationTime(
+                                        notification.createdAt,
+                                      )}
+                                    </span>
+                                  </div>
+
+                                  {!isRead && (
+                                    <span className="notification-unread-dot" />
+                                  )}
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
+
+                    {!isNotificationCenterLoading &&
+                      !notificationCenterError &&
+                      notificationTab === "REQUESTS" && (
+                        <div className="connection-request-list">
+                          {connectionRequests.length === 0 ? (
+                            <div className="notification-center-empty">
+                              <Users size={24} />
+                              <strong>No pending requests</strong>
+                              <p>New connection requests will appear here.</p>
+                            </div>
+                          ) : (
+                            connectionRequests.map((request) => {
+                              const requester = request.requesterProfile;
+                              const isProcessing =
+                                processingRequestId === request.requestId;
+                              const isAccepted =
+                                request.uiStatus === "ACCEPTED";
+                              const followBackPending =
+                                request.followBackPending === true;
+
+                              return (
+                                <article
+                                  className={`connection-request-item ${
+                                    isAccepted ? "is-accepted" : ""
+                                  }`}
+                                  key={request.requestId}
+                                >
+                                  <div className="notification-item-avatar request-avatar">
+                                    {requester?.profilePictureUrl ? (
+                                      <img
+                                        src={requester.profilePictureUrl}
+                                        alt={requester.username}
+                                      />
+                                    ) : (
+                                      getInitials(requester?.username)
+                                    )}
+                                  </div>
+
+                                  <div className="connection-request-copy">
+                                    <strong>
+                                      {requester?.username || "TrustNet User"}
+                                    </strong>
+                                    <p>
+                                      {isAccepted
+                                        ? followBackPending
+                                          ? "Follow-back request sent."
+                                          : "You accepted this request."
+                                        : "Wants to follow you."}
+                                    </p>
+
+                                    {isAccepted ? (
+                                      <button
+                                        className={`request-follow-back ${
+                                          followBackPending
+                                            ? "is-requested"
+                                            : ""
+                                        }`}
+                                        type="button"
+                                        disabled={
+                                          isProcessing || followBackPending
+                                        }
+                                        onClick={() =>
+                                          handleFollowBack(request)
+                                        }
+                                      >
+                                        {followBackPending ? (
+                                          <Check size={15} />
+                                        ) : (
+                                          <UserPlus size={15} />
+                                        )}
+                                        {isProcessing
+                                          ? "Sending..."
+                                          : followBackPending
+                                            ? "Requested"
+                                            : "Follow Back"}
+                                      </button>
+                                    ) : (
+                                      <div className="connection-request-actions">
+                                        <button
+                                          className="request-reject"
+                                          type="button"
+                                          disabled={isProcessing}
+                                          onClick={() =>
+                                            handleRejectRequest(request)
+                                          }
+                                        >
+                                          Decline
+                                        </button>
+                                        <button
+                                          className="request-accept"
+                                          type="button"
+                                          disabled={isProcessing}
+                                          onClick={() =>
+                                            handleAcceptRequest(request)
+                                          }
+                                        >
+                                          {isProcessing
+                                            ? "Updating..."
+                                            : "Accept"}
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </article>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
+                  </div>
+
+                  <footer className="notification-center-footer">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsNotificationCenterOpen(false);
+                        navigate("/notifications");
+                      }}
+                    >
+                      View all notifications
+                      <ChevronRight size={16} />
+                    </button>
+                  </footer>
+                </motion.section>
+              )}
+            </div>
           </div>
         </header>
 
@@ -730,7 +1539,11 @@ function HomePage() {
                   </div>
                 </div>
 
-                <button className="view-profile-button" type="button">
+                <button
+                  className="view-profile-button"
+                  type="button"
+                  onClick={() => navigate("/profile")}
+                >
                   View profile
                 </button>
               </div>
@@ -766,7 +1579,9 @@ function HomePage() {
                 relevant to you.
               </p>
 
-              <button type="button">Explore people</button>
+              <button type="button" onClick={() => navigate("/connections")}>
+                Explore people
+              </button>
             </section>
 
             <footer className="home-footer-links">
@@ -778,97 +1593,96 @@ function HomePage() {
           </aside>
         </div>
       </main>
-      <div className="trustnet-app">
-        {isComposerOpen && (
-          <div
-            className="composer-overlay"
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget) {
-                setIsComposerOpen(false);
-              }
+
+      {isComposerOpen && (
+        <div
+          className="composer-overlay"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setIsComposerOpen(false);
+            }
+          }}
+        >
+          <motion.section
+            className="composer-modal"
+            initial={{
+              opacity: 0,
+              scale: 0.96,
+              y: 15,
+            }}
+            animate={{
+              opacity: 1,
+              scale: 1,
+              y: 0,
+            }}
+            transition={{
+              duration: 0.2,
             }}
           >
-            <motion.section
-              className="composer-modal"
-              initial={{
-                opacity: 0,
-                scale: 0.96,
-                y: 15,
-              }}
-              animate={{
-                opacity: 1,
-                scale: 1,
-                y: 0,
-              }}
-              transition={{
-                duration: 0.2,
-              }}
-            >
-              <header className="composer-header">
+            <header className="composer-header">
+              <div>
+                <span>Create a meaningful update</span>
+                <h2>Create post</h2>
+              </div>
+
+              <button
+                type="button"
+                className="composer-close-button"
+                onClick={() => setIsComposerOpen(false)}
+                disabled={isPublishing}
+                aria-label="Close post composer"
+              >
+                <X size={21} />
+              </button>
+            </header>
+
+            <form onSubmit={handleCreatePost}>
+              <div className="composer-author">
+                <div className="feed-avatar">{initials}</div>
+
                 <div>
-                  <span>Create a meaningful update</span>
-                  <h2>Create post</h2>
+                  <strong>{displayName}</strong>
+                  <span>Sharing with your connections</span>
                 </div>
+              </div>
+
+              <textarea
+                value={postContent}
+                onChange={(event) => setPostContent(event.target.value)}
+                placeholder="What would you like to share?"
+                maxLength={2000}
+                autoFocus
+                disabled={isPublishing}
+              />
+
+              <div className="composer-character-count">
+                {postContent.length}/2000
+              </div>
+
+              <footer className="composer-footer">
+                <button
+                  className="composer-media-button"
+                  type="button"
+                  disabled={isPublishing}
+                >
+                  <Image size={18} />
+                  Add media
+                </button>
 
                 <button
-                  type="button"
-                  className="composer-close-button"
-                  onClick={() => setIsComposerOpen(false)}
-                  disabled={isPublishing}
-                  aria-label="Close post composer"
+                  className="composer-publish-button"
+                  type="submit"
+                  disabled={isPublishing || !postContent.trim()}
                 >
-                  <X size={21} />
+                  <Send size={17} />
+
+                  {isPublishing ? "Publishing..." : "Publish"}
                 </button>
-              </header>
-
-              <form onSubmit={handleCreatePost}>
-                <div className="composer-author">
-                  <div className="feed-avatar">{initials}</div>
-
-                  <div>
-                    <strong>{displayName}</strong>
-                    <span>Sharing with your connections</span>
-                  </div>
-                </div>
-
-                <textarea
-                  value={postContent}
-                  onChange={(event) => setPostContent(event.target.value)}
-                  placeholder="What would you like to share?"
-                  maxLength={2000}
-                  autoFocus
-                  disabled={isPublishing}
-                />
-
-                <div className="composer-character-count">
-                  {postContent.length}/2000
-                </div>
-
-                <footer className="composer-footer">
-                  <button
-                    className="composer-media-button"
-                    type="button"
-                    disabled={isPublishing}
-                  >
-                    <Image size={18} />
-                    Add media
-                  </button>
-
-                  <button
-                    className="composer-publish-button"
-                    type="submit"
-                    disabled={isPublishing || !postContent.trim()}
-                  >
-                    <Send size={17} />
-
-                    {isPublishing ? "Publishing..." : "Publish"}
-                  </button>
-                </footer>
-              </form>
-            </motion.section>
-          </div>
-        )}
-      </div>
+              </footer>
+            </form>
+          </motion.section>
+        </div>
+      )}
     </div>
   );
 }

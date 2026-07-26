@@ -9,6 +9,7 @@ import RegisterPage from "../pages/RegisterPage";
 import ConnectionsPage from "../pages/ConnectionsPage";
 import ProfilePage from "../pages/ProfilePage";
 import NotificationsPage from "../pages/NotificationsPage";
+import FollowingPage from "../pages/FollowingPage";
 
 function RootRedirect() {
   const { isAuthenticated } = useAuth();
@@ -24,6 +25,8 @@ function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
 
       <Route path="/register" element={<RegisterPage />} />
+
+      <Route path="/following" element={<FollowingPage />} />
 
       <Route
         path="/connections"

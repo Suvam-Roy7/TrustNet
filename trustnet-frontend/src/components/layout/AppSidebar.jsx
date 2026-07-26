@@ -1,7 +1,7 @@
+import { useEffect, useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 
 import {
-  Bell,
   Bookmark,
   Home,
   LogOut,
@@ -11,6 +11,7 @@ import {
   Users,
 } from "lucide-react";
 
+import { getProfileByUserIdRequest } from "../../api/profileApi";
 import tokenService from "../../auth/tokenService";
 
 import "../../styles/appLayout.css";
@@ -30,11 +31,6 @@ const navigationItems = [
     label: "Connections",
     path: "/connections",
     icon: Users,
-  },
-  {
-    label: "Notifications",
-    path: "/notifications",
-    icon: Bell,
   },
   {
     label: "Saved",
@@ -64,16 +60,66 @@ const getInitials = (value) => {
     .join("");
 };
 
+const formatTrustLevel = (trustLevel) => {
+  if (!trustLevel) {
+    return "New member";
+  }
+
+  return trustLevel
+    .replaceAll("_", " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+};
+
 function AppSidebar() {
   const navigate = useNavigate();
+  const [profile, setProfile] = useState(null);
+  const [isProfileLoading, setIsProfileLoading] = useState(true);
 
+  const currentUserId = tokenService.getCurrentUserId();
   const currentEmail = tokenService.getCurrentEmail() || "TrustNet User";
 
-  const displayName = currentEmail.includes("@")
-    ? currentEmail.split("@")[0]
-    : currentEmail;
+  useEffect(() => {
+    const loadProfile = async () => {
+      if (!currentUserId) {
+        setIsProfileLoading(false);
+        return;
+      }
 
-  const initials = getInitials(displayName);
+      try {
+        const response = await getProfileByUserIdRequest(currentUserId);
+        setProfile(response?.data ?? response);
+      } catch (error) {
+        console.error(
+          "Unable to load sidebar profile:",
+          error.response?.data || error.message,
+        );
+        setProfile(null);
+      } finally {
+        setIsProfileLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, [currentUserId]);
+
+  const displayName = useMemo(() => {
+    const profileUsername = profile?.username || profile?.userName;
+
+    if (typeof profileUsername === "string" && profileUsername.trim()) {
+      return profileUsername.trim();
+    }
+
+    return currentEmail.includes("@")
+      ? currentEmail.split("@")[0]
+      : currentEmail;
+  }, [currentEmail, profile]);
+
+  const initials = useMemo(() => getInitials(displayName), [displayName]);
+  const trustLevel = useMemo(
+    () => formatTrustLevel(profile?.trustLevel),
+    [profile?.trustLevel],
+  );
 
   const handleLogout = () => {
     tokenService.clearTokens();
@@ -92,7 +138,6 @@ function AppSidebar() {
 
         <div>
           <strong>TrustNet</strong>
-
           <span>Social, without the noise</span>
         </div>
       </div>
@@ -143,8 +188,8 @@ function AppSidebar() {
         </div>
 
         <div className="trustnet-sidebar-user-details">
-          <strong>{displayName}</strong>
-          <span>Private member</span>
+          <strong>{isProfileLoading ? "Loading..." : displayName}</strong>
+          <span>{isProfileLoading ? "Loading profile" : trustLevel}</span>
         </div>
 
         <button

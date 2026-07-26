@@ -1,5 +1,7 @@
 import AppSidebar from "./AppSidebar";
 
+import AppNotificationBell from "../notifications/AppNotificationBell";
+
 import "../../styles/appLayout.css";
 
 function AppPageLayout({ children }) {
@@ -8,6 +10,7 @@ function AppPageLayout({ children }) {
       <AppSidebar />
 
       <div className="trustnet-page-content">{children}</div>
+      <AppNotificationBell />
     </div>
   );
 }

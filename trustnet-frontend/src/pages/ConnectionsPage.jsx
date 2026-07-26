@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import {
   ArrowLeft,
+  ArrowRight,
   Check,
   Search,
   ShieldCheck,
@@ -16,18 +17,13 @@ import {
   getProfileByUserIdRequest,
   getProfileByUsernameRequest,
 } from "../api/profileApi";
-
 import {
-  acceptFollowRequestRequest,
   getFollowingUsersRequest,
-  getIncomingFollowRequestsRequest,
   getRelationshipStatusRequest,
   getSuggestedUsersRequest,
-  rejectFollowRequestRequest,
   sendFollowRequest,
   unfollowUserRequest,
 } from "../api/socialApi";
-
 import tokenService from "../auth/tokenService";
 import AppPageLayout from "../components/layout/AppPageLayout";
 
@@ -38,9 +34,8 @@ const getInitials = (name) => {
     return "TN";
   }
 
-  const readableName = name.replace(/([a-z])([A-Z])/g, "$1 $2");
-
-  return readableName
+  return name
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
     .split(/[\s._-]+/)
     .filter(Boolean)
     .slice(0, 2)
@@ -60,44 +55,45 @@ const formatTrustLevel = (trustLevel) => {
 };
 
 const normalizeProfile = (profile) => {
-  if (!profile) {
+  const profileData = profile?.data ?? profile;
+
+  if (!profileData) {
     return null;
   }
 
   return {
-    userId: profile.userId || profile.id || profile.profileId || null,
-
-    username: profile.username || profile.displayName || "TrustNet User",
-
-    email: profile.email || "",
-    bio: profile.bio || "",
-    website: profile.website || "",
-
-    trustLevel: profile.trustLevel || profile.trust_level || "NEW_USER",
-
+    userId:
+      profileData.userId || profileData.id || profileData.profileId || null,
+    username:
+      profileData.username ||
+      profileData.userName ||
+      profileData.displayName ||
+      "TrustNet User",
+    email: profileData.email || "",
+    bio: profileData.bio || "",
+    website: profileData.website || "",
+    trustLevel: profileData.trustLevel || profileData.trust_level || "NEW_USER",
     profilePictureUrl:
-      profile.profilePictureUrl ||
-      profile.profileImageUrl ||
-      profile.avatarUrl ||
+      profileData.profilePictureUrl ||
+      profileData.profileImageUrl ||
+      profileData.avatarUrl ||
       null,
   };
 };
 
 const extractList = (response) => {
-  if (Array.isArray(response)) {
-    return response;
+  const payload = response?.data ?? response;
+
+  if (Array.isArray(payload)) {
+    return payload;
   }
 
-  if (Array.isArray(response?.content)) {
-    return response.content;
+  if (Array.isArray(payload?.content)) {
+    return payload.content;
   }
 
-  if (Array.isArray(response?.users)) {
-    return response.users;
-  }
-
-  if (Array.isArray(response?.requests)) {
-    return response.requests;
+  if (Array.isArray(payload?.users)) {
+    return payload.users;
   }
 
   return [];
@@ -118,47 +114,46 @@ const getErrorMessage = (error, fallbackMessage) => {
   );
 };
 
-const isPendingRelationship = (response) =>
-  response?.requestPending === true || response?.requestStatus === "PENDING";
+const FOLLOWING_PREVIEW_LIMIT = 15;
+
+const isPendingRelationship = (response) => {
+  const payload = response?.data ?? response;
+
+  return (
+    payload?.requestPending === true || payload?.requestStatus === "PENDING"
+  );
+};
 
 function ConnectionsPage() {
   const currentUserId = tokenService.getCurrentUserId();
 
   const [username, setUsername] = useState("");
-
   const [searchedProfile, setSearchedProfile] = useState(null);
-
   const [isSearching, setIsSearching] = useState(false);
-
   const [searchError, setSearchError] = useState("");
 
   const [isFollowing, setIsFollowing] = useState(false);
-
   const [isRequestPending, setIsRequestPending] = useState(false);
-
   const [isRelationshipLoading, setIsRelationshipLoading] = useState(false);
 
   const [followingUsers, setFollowingUsers] = useState([]);
-
   const [suggestedUsers, setSuggestedUsers] = useState([]);
-
-  const [incomingRequests, setIncomingRequests] = useState([]);
-
   const [isConnectionsLoading, setIsConnectionsLoading] = useState(true);
-
   const [connectionsError, setConnectionsError] = useState("");
-
   const [updatingUserId, setUpdatingUserId] = useState(null);
-
-  const [processingRequestId, setProcessingRequestId] = useState(null);
 
   const isOwnProfile =
     Boolean(searchedProfile?.userId) &&
     searchedProfile.userId === currentUserId;
 
-  const initials = useMemo(
+  const searchedInitials = useMemo(
     () => getInitials(searchedProfile?.username),
     [searchedProfile?.username],
+  );
+
+  const followingPreview = useMemo(
+    () => followingUsers.slice(0, FOLLOWING_PREVIEW_LIMIT),
+    [followingUsers],
   );
 
   const markSuggestedRequestPending = (userId, requestPending) => {
@@ -216,33 +211,15 @@ function ConnectionsPage() {
     setConnectionsError("");
 
     try {
-      const [followingResult, incomingResult, suggestedResult] =
-        await Promise.allSettled([
-          getFollowingUsersRequest(),
-          getIncomingFollowRequestsRequest(),
-          getSuggestedUsersRequest(6),
-        ]);
-
-      const followingResponse =
-        followingResult.status === "fulfilled" ? followingResult.value : [];
-
-      const incomingResponse =
-        incomingResult.status === "fulfilled" ? incomingResult.value : [];
-
-      const suggestedResponse =
-        suggestedResult.status === "fulfilled" ? suggestedResult.value : [];
+      const [followingResult, suggestedResult] = await Promise.allSettled([
+        getFollowingUsersRequest(),
+        getSuggestedUsersRequest(8),
+      ]);
 
       if (followingResult.status === "rejected") {
         console.error(
           "Unable to load following users:",
           followingResult.reason,
-        );
-      }
-
-      if (incomingResult.status === "rejected") {
-        console.error(
-          "Unable to load incoming requests:",
-          incomingResult.reason,
         );
       }
 
@@ -252,6 +229,11 @@ function ConnectionsPage() {
           suggestedResult.reason,
         );
       }
+
+      const followingResponse =
+        followingResult.status === "fulfilled" ? followingResult.value : [];
+      const suggestedResponse =
+        suggestedResult.status === "fulfilled" ? suggestedResult.value : [];
 
       const followingUserIds = extractList(followingResponse).filter(
         (userId) => typeof userId === "string" && userId !== currentUserId,
@@ -263,7 +245,6 @@ function ConnectionsPage() {
             try {
               const profileResponse =
                 await getProfileByUserIdRequest(followedUserId);
-
               const profile = normalizeProfile(profileResponse);
 
               if (!profile?.userId) {
@@ -280,7 +261,6 @@ function ConnectionsPage() {
                 "Unable to load followed user profile:",
                 followedUserId,
                 profileError.response?.status,
-                profileError.response?.data || profileError.message,
               );
 
               return null;
@@ -302,26 +282,22 @@ function ConnectionsPage() {
             !followedUserIds.has(profile.userId),
         );
 
-      /*
-       * Load each suggested user's current
-       * relationship status so an existing
-       * pending request shows Requested.
-       */
       const enrichedSuggestedUsers = await Promise.all(
         suggestedProfiles.map(async (profile) => {
           try {
             const statusResponse = await getRelationshipStatusRequest(
               profile.userId,
             );
+            const payload = statusResponse?.data ?? statusResponse;
 
-            if (statusResponse?.following === true) {
+            if (payload?.following === true) {
               return null;
             }
 
             return {
               ...profile,
               following: false,
-              requestPending: isPendingRelationship(statusResponse),
+              requestPending: isPendingRelationship(payload),
             };
           } catch (statusError) {
             console.error(
@@ -339,49 +315,15 @@ function ConnectionsPage() {
         }),
       );
 
-      const rawIncomingRequests = extractList(incomingResponse);
-
-      /*
-       * SocialGraph stores UUIDs. ProfileService
-       * provides username, bio and avatar.
-       */
-      const enrichedIncomingRequests = await Promise.all(
-        rawIncomingRequests.map(async (request) => {
-          try {
-            const profileResponse = await getProfileByUserIdRequest(
-              request.requesterId,
-            );
-
-            return {
-              ...request,
-              requesterProfile: normalizeProfile(profileResponse),
-            };
-          } catch (profileError) {
-            console.error(
-              "Unable to load follow requester profile:",
-              request.requesterId,
-              profileError.response?.status,
-            );
-
-            return {
-              ...request,
-              requesterProfile: {
-                userId: request.requesterId,
-                username: "TrustNet User",
-                bio: "",
-                trustLevel: "NEW_USER",
-                profilePictureUrl: null,
-              },
-            };
-          }
-        }),
-      );
-
       setFollowingUsers(loadedFollowing);
-
       setSuggestedUsers(enrichedSuggestedUsers.filter(Boolean));
 
-      setIncomingRequests(enrichedIncomingRequests);
+      if (
+        followingResult.status === "rejected" &&
+        suggestedResult.status === "rejected"
+      ) {
+        setConnectionsError("Unable to load your connections right now.");
+      }
     } catch (error) {
       console.error(
         "Unable to load connections:",
@@ -408,7 +350,6 @@ function ConnectionsPage() {
 
     if (!cleanUsername) {
       setSearchError("Enter a username to search.");
-
       return;
     }
 
@@ -420,7 +361,6 @@ function ConnectionsPage() {
 
     try {
       const profileResponse = await getProfileByUsernameRequest(cleanUsername);
-
       const profile = normalizeProfile(profileResponse);
 
       if (!profile?.userId) {
@@ -434,10 +374,10 @@ function ConnectionsPage() {
         const relationshipResponse = await getRelationshipStatusRequest(
           profile.userId,
         );
+        const payload = relationshipResponse?.data ?? relationshipResponse;
 
-        followingStatus = relationshipResponse?.following === true;
-
-        pendingStatus = isPendingRelationship(relationshipResponse);
+        followingStatus = payload?.following === true;
+        pendingStatus = isPendingRelationship(payload);
       }
 
       setSearchedProfile(profile);
@@ -478,18 +418,14 @@ function ConnectionsPage() {
 
     try {
       await sendFollowRequest(searchedProfile.userId);
-
       setIsRequestPending(true);
-
       markSuggestedRequestPending(searchedProfile.userId, true);
-
       toast.success(`Follow request sent to ${searchedProfile.username}.`);
     } catch (error) {
       const errorMessage = getErrorMessage(
         error,
         "Unable to send follow request.",
       );
-
       const isExistingRequest =
         error.response?.status === 409 ||
         errorMessage.toLowerCase().includes("pending") ||
@@ -497,9 +433,7 @@ function ConnectionsPage() {
 
       if (isExistingRequest) {
         setIsRequestPending(true);
-
         markSuggestedRequestPending(searchedProfile.userId, true);
-
         toast.info(
           `Your request to ${searchedProfile.username} is already pending.`,
         );
@@ -520,12 +454,9 @@ function ConnectionsPage() {
 
     try {
       await unfollowUserRequest(searchedProfile.userId);
-
       setIsFollowing(false);
       setIsRequestPending(false);
-
       removeFromFollowingList(searchedProfile);
-
       toast.success(`You unfollowed ${searchedProfile.username}.`);
     } catch (error) {
       const errorMessage = getErrorMessage(
@@ -535,7 +466,6 @@ function ConnectionsPage() {
 
       if (error.response?.status === 404) {
         setIsFollowing(false);
-
         removeFromFollowingList(searchedProfile);
       }
 
@@ -545,7 +475,7 @@ function ConnectionsPage() {
     }
   };
 
-  const handleCompactRelationship = async (user, currentlyFollowing) => {
+  const handleCardRelationship = async (user, currentlyFollowing) => {
     if (!user?.userId || updatingUserId) {
       return;
     }
@@ -559,7 +489,6 @@ function ConnectionsPage() {
     try {
       if (currentlyFollowing) {
         await unfollowUserRequest(user.userId);
-
         removeFromFollowingList(user);
 
         if (searchedProfile?.userId === user.userId) {
@@ -570,7 +499,6 @@ function ConnectionsPage() {
         toast.success(`You unfollowed ${user.username}.`);
       } else {
         await sendFollowRequest(user.userId);
-
         markSuggestedRequestPending(user.userId, true);
 
         if (searchedProfile?.userId === user.userId) {
@@ -584,7 +512,6 @@ function ConnectionsPage() {
         error,
         "Unable to update this relationship.",
       );
-
       const isExistingRequest =
         error.response?.status === 409 ||
         errorMessage.toLowerCase().includes("pending") ||
@@ -606,221 +533,19 @@ function ConnectionsPage() {
     }
   };
 
-  const handleAcceptRequest = async (request) => {
-    if (!request?.requestId || !request?.requesterId || processingRequestId) {
-      return;
-    }
-
-    setProcessingRequestId(request.requestId);
-
-    try {
-      await acceptFollowRequestRequest(request.requestId);
-
-      let relationshipStatus = null;
-
-      try {
-        relationshipStatus = await getRelationshipStatusRequest(
-          request.requesterId,
-        );
-      } catch (statusError) {
-        console.error(
-          "Unable to check follow-back status:",
-          statusError.response?.status,
-          statusError.response?.data || statusError.message,
-        );
-      }
-
-      const alreadyFollowingRequester = relationshipStatus?.following === true;
-
-      const reverseRequestPending = isPendingRelationship(relationshipStatus);
-
-      /*
-       * Example:
-       * Aman already follows Suvam.
-       * Aman accepts Suvam's reverse request.
-       * Aman must not see Follow Back again.
-       */
-      if (alreadyFollowingRequester) {
-        setIncomingRequests((currentRequests) =>
-          currentRequests.filter(
-            (item) => item.requestId !== request.requestId,
-          ),
-        );
-
-        toast.success(
-          `You accepted ${
-            request.requesterProfile?.username || "the user"
-          }. You now follow each other.`,
-        );
-
-        return;
-      }
-
-      /*
-       * Keep the same card in Incoming requests,
-       * but change its buttons to Follow Back.
-       */
-      setIncomingRequests((currentRequests) =>
-        currentRequests.map((item) =>
-          item.requestId === request.requestId
-            ? {
-                ...item,
-                uiStatus: "ACCEPTED",
-                followBackPending: reverseRequestPending,
-              }
-            : item,
-        ),
-      );
-
-      toast.success(
-        `You accepted ${
-          request.requesterProfile?.username || "the user"
-        }'s follow request.`,
-      );
-    } catch (error) {
-      toast.error(getErrorMessage(error, "Unable to accept this request."));
-    } finally {
-      setProcessingRequestId(null);
-    }
-  };
-
-  const handleRejectRequest = async (request) => {
-    if (!request?.requestId || processingRequestId) {
-      return;
-    }
-
-    setProcessingRequestId(request.requestId);
-
-    try {
-      await rejectFollowRequestRequest(request.requestId);
-
-      setIncomingRequests((currentRequests) =>
-        currentRequests.filter((item) => item.requestId !== request.requestId),
-      );
-
-      toast.info("Follow request declined.");
-    } catch (error) {
-      toast.error(getErrorMessage(error, "Unable to decline this request."));
-    } finally {
-      setProcessingRequestId(null);
-    }
-  };
-
-  const handleFollowBack = async (request) => {
-    if (
-      !request?.requesterId ||
-      processingRequestId ||
-      request.followBackPending
-    ) {
-      return;
-    }
-
-    setProcessingRequestId(request.requestId);
-
-    try {
-      const relationshipStatus = await getRelationshipStatusRequest(
-        request.requesterId,
-      );
-
-      /*
-       * Prevent a duplicate follow relationship.
-       */
-      if (relationshipStatus?.following === true) {
-        setIncomingRequests((currentRequests) =>
-          currentRequests.filter(
-            (item) => item.requestId !== request.requestId,
-          ),
-        );
-
-        toast.info(
-          `You already follow ${
-            request.requesterProfile?.username || "this user"
-          }.`,
-        );
-
-        return;
-      }
-
-      /*
-       * Prevent a duplicate reverse request.
-       */
-      if (isPendingRelationship(relationshipStatus)) {
-        setIncomingRequests((currentRequests) =>
-          currentRequests.map((item) =>
-            item.requestId === request.requestId
-              ? {
-                  ...item,
-                  followBackPending: true,
-                }
-              : item,
-          ),
-        );
-
-        toast.info("Your follow-back request is already pending.");
-
-        return;
-      }
-
-      await sendFollowRequest(request.requesterId);
-
-      setIncomingRequests((currentRequests) =>
-        currentRequests.map((item) =>
-          item.requestId === request.requestId
-            ? {
-                ...item,
-                followBackPending: true,
-              }
-            : item,
-        ),
-      );
-
-      toast.success(
-        `Follow-back request sent to ${
-          request.requesterProfile?.username || "the user"
-        }.`,
-      );
-    } catch (error) {
-      const errorMessage = getErrorMessage(
-        error,
-        "Unable to send the follow-back request.",
-      );
-
-      const requestAlreadyExists =
-        error.response?.status === 409 ||
-        errorMessage.toLowerCase().includes("pending") ||
-        errorMessage.toLowerCase().includes("already");
-
-      if (requestAlreadyExists) {
-        setIncomingRequests((currentRequests) =>
-          currentRequests.map((item) =>
-            item.requestId === request.requestId
-              ? {
-                  ...item,
-                  followBackPending: true,
-                }
-              : item,
-          ),
-        );
-
-        toast.info("Your follow-back request is already pending.");
-      } else {
-        toast.error(errorMessage);
-      }
-    } finally {
-      setProcessingRequestId(null);
-    }
-  };
-
-  const renderCompactUserCard = (user, relationshipType) => {
+  const renderPersonCard = (user, relationshipType) => {
     const currentlyFollowing = relationshipType === "FOLLOWING";
-
     const requestPending = user.requestPending === true;
-
     const isUpdating = updatingUserId === user.userId;
 
     return (
-      <article className="connection-list-user-card" key={user.userId}>
-        <div className="connection-list-avatar">
+      <motion.article
+        className="social-person-card"
+        key={user.userId}
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div className="social-person-avatar">
           {user.profilePictureUrl ? (
             <img src={user.profilePictureUrl} alt={user.username} />
           ) : (
@@ -828,50 +553,43 @@ function ConnectionsPage() {
           )}
         </div>
 
-        <div className="connection-list-user-info">
+        <div className="social-person-copy">
           <strong>{user.username}</strong>
-
           <p>{user.bio || "This user has not added an introduction yet."}</p>
-
           <span>{formatTrustLevel(user.trustLevel)}</span>
         </div>
 
-        {currentlyFollowing ? (
-          <button
-            type="button"
-            className="connection-list-unfollow"
-            disabled={isUpdating}
-            onClick={() => handleCompactRelationship(user, true)}
-          >
-            <UserMinus size={17} />
+        <button
+          type="button"
+          className={`social-person-action ${
+            currentlyFollowing ? "is-unfollow" : "is-follow"
+          } ${requestPending ? "is-requested" : ""}`}
+          disabled={isUpdating || requestPending}
+          onClick={() => handleCardRelationship(user, currentlyFollowing)}
+        >
+          {currentlyFollowing ? (
+            <UserMinus size={16} />
+          ) : requestPending ? (
+            <Check size={16} />
+          ) : (
+            <UserPlus size={16} />
+          )}
 
-            {isUpdating ? "Updating..." : "Unfollow"}
-          </button>
-        ) : (
-          <button
-            type="button"
-            className={`connection-list-follow ${
-              requestPending ? "requested-button" : ""
-            }`}
-            disabled={isUpdating || requestPending}
-            onClick={() => handleCompactRelationship(user, false)}
-          >
-            {requestPending ? <Check size={17} /> : <UserPlus size={17} />}
-
-            {isUpdating
-              ? "Sending..."
+          {isUpdating
+            ? "Updating..."
+            : currentlyFollowing
+              ? "Unfollow"
               : requestPending
                 ? "Requested"
                 : "Follow"}
-          </button>
-        )}
-      </article>
+        </button>
+      </motion.article>
     );
   };
 
   return (
     <AppPageLayout>
-      <main className="connections-page">
+      <main className="connections-page connections-page-redesign">
         <header className="connections-header">
           <div className="connections-header-content">
             <Link className="connections-back-link" to="/home">
@@ -886,40 +604,32 @@ function ConnectionsPage() {
 
               <div>
                 <p>Build genuine connections</p>
-
                 <h1>Find people</h1>
               </div>
             </div>
 
             <p className="connections-description">
-              Search for people you know and choose meaningful accounts to
-              follow.
+              Search people you know, manage the accounts you follow, and
+              discover thoughtful new connections.
             </p>
           </div>
         </header>
 
-        <section className="connections-content">
-          <motion.div
-            className="connection-search-card"
-            initial={{
-              opacity: 0,
-              y: 14,
-            }}
-            animate={{
-              opacity: 1,
-              y: 0,
-            }}
+        <section className="connections-content connections-social-content">
+          <motion.section
+            className="connections-search-panel"
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
           >
-            <div className="connection-search-heading">
+            <div className="connections-search-copy">
+              <span>People search</span>
               <h2>Search TrustNet</h2>
-
-              <p>Enter an exact username to find a profile.</p>
+              <p>Enter an exact username to find someone.</p>
             </div>
 
             <form className="connection-search-form" onSubmit={handleSearch}>
               <div className="connection-search-input">
                 <Search size={19} />
-
                 <input
                   type="text"
                   value={username}
@@ -927,7 +637,6 @@ function ConnectionsPage() {
                   autoComplete="off"
                   onChange={(event) => {
                     setUsername(event.target.value);
-
                     setSearchError("");
                   }}
                 />
@@ -941,125 +650,81 @@ function ConnectionsPage() {
             {searchError && (
               <div className="connection-search-error">{searchError}</div>
             )}
-          </motion.div>
 
-          {searchedProfile && (
-            <motion.article
-              className="connection-profile-card"
-              initial={{
-                opacity: 0,
-                scale: 0.98,
-              }}
-              animate={{
-                opacity: 1,
-                scale: 1,
-              }}
-            >
-              <div className="connection-cover" />
-
-              <div className="connection-profile-body">
-                <div className="connection-profile-top">
-                  <div className="connection-avatar">
-                    {searchedProfile.profilePictureUrl ? (
-                      <img
-                        src={searchedProfile.profilePictureUrl}
-                        alt={searchedProfile.username}
-                      />
-                    ) : (
-                      <span>{initials}</span>
-                    )}
-                  </div>
-
-                  {!isOwnProfile && (
-                    <div className="connection-action-wrapper">
-                      {isFollowing ? (
-                        <button
-                          className="connection-button unfollow-button"
-                          type="button"
-                          disabled={isRelationshipLoading}
-                          onClick={handleUnfollow}
-                        >
-                          <UserMinus size={18} />
-
-                          <span>
-                            {isRelationshipLoading ? "Updating..." : "Unfollow"}
-                          </span>
-                        </button>
-                      ) : (
-                        <button
-                          className={`connection-button follow-button ${
-                            isRequestPending ? "requested-button" : ""
-                          }`}
-                          type="button"
-                          disabled={isRelationshipLoading || isRequestPending}
-                          onClick={handleFollow}
-                        >
-                          {isRequestPending ? (
-                            <Check size={18} />
-                          ) : (
-                            <UserPlus size={18} />
-                          )}
-
-                          <span>
-                            {isRelationshipLoading
-                              ? "Sending..."
-                              : isRequestPending
-                                ? "Requested"
-                                : "Follow"}
-                          </span>
-                        </button>
-                      )}
-                    </div>
+            {searchedProfile && (
+              <motion.article
+                className="connection-search-result"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <div className="connection-search-result-avatar">
+                  {searchedProfile.profilePictureUrl ? (
+                    <img
+                      src={searchedProfile.profilePictureUrl}
+                      alt={searchedProfile.username}
+                    />
+                  ) : (
+                    searchedInitials
                   )}
                 </div>
 
-                <div className="connection-profile-details">
-                  <div className="connection-name-row">
-                    <h2>{searchedProfile.username}</h2>
+                <div className="connection-search-result-copy">
+                  <div className="connection-search-result-name">
+                    <strong>{searchedProfile.username}</strong>
 
                     {isFollowing && (
                       <span className="following-status">
-                        <Check size={13} />
-                        Following
-                      </span>
-                    )}
-
-                    {!isFollowing && isRequestPending && (
-                      <span className="following-status">
-                        <Check size={13} />
-                        Requested
+                        <Check size={12} /> Following
                       </span>
                     )}
                   </div>
 
-                  {searchedProfile.email && (
-                    <p className="connection-email">{searchedProfile.email}</p>
-                  )}
+                  <p>
+                    {searchedProfile.bio ||
+                      "This user has not added an introduction yet."}
+                  </p>
 
-                  <div className="connection-profile-bio">
-                    <span>About</span>
-
-                    <p>
-                      {searchedProfile.bio ||
-                        "This user has not added an introduction yet."}
-                    </p>
-                  </div>
-
-                  <div className="connection-trust-level">
-                    <ShieldCheck size={15} />
-
-                    <span>{formatTrustLevel(searchedProfile.trustLevel)}</span>
-                  </div>
-
-                  {isOwnProfile && (
-                    <div className="own-profile-message">
-                      This is your profile. You cannot follow yourself.
-                    </div>
-                  )}
+                  <span className="connection-result-trust">
+                    <ShieldCheck size={14} />
+                    {formatTrustLevel(searchedProfile.trustLevel)}
+                  </span>
                 </div>
-              </div>
-            </motion.article>
-          )}
+
+                {!isOwnProfile && (
+                  <button
+                    type="button"
+                    className={`connection-result-action ${
+                      isFollowing ? "is-unfollow" : "is-follow"
+                    } ${isRequestPending ? "is-requested" : ""}`}
+                    disabled={isRelationshipLoading || isRequestPending}
+                    onClick={isFollowing ? handleUnfollow : handleFollow}
+                  >
+                    {isFollowing ? (
+                      <UserMinus size={17} />
+                    ) : isRequestPending ? (
+                      <Check size={17} />
+                    ) : (
+                      <UserPlus size={17} />
+                    )}
+
+                    {isRelationshipLoading
+                      ? "Updating..."
+                      : isFollowing
+                        ? "Unfollow"
+                        : isRequestPending
+                          ? "Requested"
+                          : "Follow"}
+                  </button>
+                )}
+
+                {isOwnProfile && (
+                  <span className="connection-own-profile-label">
+                    This is you
+                  </span>
+                )}
+              </motion.article>
+            )}
+          </motion.section>
 
           {isConnectionsLoading && (
             <div className="connections-list-status">
@@ -1070,7 +735,6 @@ function ConnectionsPage() {
           {!isConnectionsLoading && connectionsError && (
             <div className="connections-list-status connections-list-error">
               <span>{connectionsError}</span>
-
               <button type="button" onClick={loadConnections}>
                 Try again
               </button>
@@ -1078,179 +742,86 @@ function ConnectionsPage() {
           )}
 
           {!isConnectionsLoading && !connectionsError && (
-            <>
-              <section className="connections-list-section">
-                <div className="connections-list-heading">
-                  <div>
-                    <p>Waiting for you</p>
-                    <h2>Incoming requests</h2>
-                  </div>
-
-                  <span>{incomingRequests.length}</span>
-                </div>
-
-                {incomingRequests.length === 0 ? (
-                  <div className="connections-list-empty">
-                    You have no pending follow requests.
-                  </div>
-                ) : (
-                  <div className="connections-list-grid">
-                    {incomingRequests.map((request) => {
-                      const requester = request.requesterProfile;
-
-                      const isProcessing =
-                        processingRequestId === request.requestId;
-
-                      const isAccepted = request.uiStatus === "ACCEPTED";
-
-                      const followBackPending =
-                        request.followBackPending === true;
-
-                      return (
-                        <article
-                          className={`connection-list-user-card ${
-                            isAccepted ? "accepted-request-card" : ""
-                          }`}
-                          key={request.requestId}
-                        >
-                          <div className="connection-list-avatar">
-                            {requester?.profilePictureUrl ? (
-                              <img
-                                src={requester.profilePictureUrl}
-                                alt={requester.username || "TrustNet user"}
-                              />
-                            ) : (
-                              getInitials(requester?.username)
-                            )}
-                          </div>
-
-                          <div className="connection-list-user-info">
-                            <strong>
-                              {requester?.username || "TrustNet User"}
-                            </strong>
-
-                            <p>
-                              {isAccepted
-                                ? "You accepted this follow request."
-                                : requester?.bio ||
-                                  "Sent you a follow request."}
-                            </p>
-
-                            <span>
-                              {isAccepted
-                                ? followBackPending
-                                  ? "Follow-back request pending"
-                                  : "Follow back to connect both ways"
-                                : "Wants to follow you"}
-                            </span>
-                          </div>
-
-                          {isAccepted ? (
-                            <button
-                              type="button"
-                              className={`follow-request-follow-back ${
-                                followBackPending ? "requested-button" : ""
-                              }`}
-                              disabled={isProcessing || followBackPending}
-                              onClick={() => handleFollowBack(request)}
-                            >
-                              {followBackPending ? (
-                                <>
-                                  <Check size={17} />
-                                  Requested
-                                </>
-                              ) : (
-                                <>
-                                  <UserPlus size={17} />
-
-                                  {isProcessing ? "Sending..." : "Follow Back"}
-                                </>
-                              )}
-                            </button>
-                          ) : (
-                            <div className="follow-request-actions">
-                              <button
-                                type="button"
-                                className="follow-request-reject"
-                                disabled={isProcessing}
-                                onClick={() => handleRejectRequest(request)}
-                              >
-                                {isProcessing ? "Updating..." : "Decline"}
-                              </button>
-
-                              <button
-                                type="button"
-                                className="follow-request-accept"
-                                disabled={isProcessing}
-                                onClick={() => handleAcceptRequest(request)}
-                              >
-                                {isProcessing ? "Updating..." : "Accept"}
-                              </button>
-                            </div>
-                          )}
-                        </article>
-                      );
-                    })}
-                  </div>
-                )}
-              </section>
-
-              <section className="connections-list-section">
-                <div className="connections-list-heading">
+            <div className="connections-social-sections">
+              <section className="connections-social-section">
+                <div className="connections-social-heading">
                   <div>
                     <p>Your network</p>
                     <h2>Following</h2>
+                    {followingUsers.length > FOLLOWING_PREVIEW_LIMIT && (
+                      <small>
+                        Showing {FOLLOWING_PREVIEW_LIMIT} of{" "}
+                        {followingUsers.length}
+                      </small>
+                    )}
                   </div>
 
-                  <span>{followingUsers.length}</span>
+                  <div className="connections-heading-actions">
+                    <span className="connections-count-badge">
+                      {followingUsers.length}
+                    </span>
+
+                    {followingUsers.length > 0 && (
+                      <Link className="connections-see-all" to="/following">
+                        <span>See all</span>
+                        <ArrowRight size={16} />
+                      </Link>
+                    )}
+                  </div>
                 </div>
 
                 {followingUsers.length === 0 ? (
-                  <div className="connections-list-empty">
-                    You are not following anyone yet.
+                  <div className="connections-social-empty">
+                    <Users size={23} />
+                    <div>
+                      <strong>Your following list is empty</strong>
+                      <p>Search for someone you know to start your network.</p>
+                    </div>
                   </div>
                 ) : (
-                  <div className="connections-list-grid">
-                    {followingUsers.map((user) =>
-                      renderCompactUserCard(user, "FOLLOWING"),
+                  <div className="connections-people-grid">
+                    {followingPreview.map((user) =>
+                      renderPersonCard(user, "FOLLOWING"),
                     )}
                   </div>
                 )}
               </section>
 
-              <section className="connections-list-section">
-                <div className="connections-list-heading">
+              <section className="connections-social-section">
+                <div className="connections-social-heading">
                   <div>
                     <p>Discover thoughtfully</p>
-
                     <h2>Suggested for you</h2>
                   </div>
+                  <span>{suggestedUsers.length}</span>
                 </div>
 
                 {suggestedUsers.length === 0 ? (
-                  <div className="connections-list-empty">
-                    No new suggestions are available.
+                  <div className="connections-social-empty">
+                    <UserPlus size={23} />
+                    <div>
+                      <strong>No new suggestions right now</strong>
+                      <p>Try searching for someone by their exact username.</p>
+                    </div>
                   </div>
                 ) : (
-                  <div className="connections-list-grid">
+                  <div className="connections-people-grid">
                     {suggestedUsers.map((user) =>
-                      renderCompactUserCard(user, "SUGGESTED"),
+                      renderPersonCard(user, "SUGGESTED"),
                     )}
                   </div>
                 )}
               </section>
-            </>
+            </div>
           )}
 
           <aside className="connections-privacy-note">
             <ShieldCheck size={22} />
-
             <div>
               <strong>Connection quality over quantity</strong>
-
               <p>
-                TrustNet does not promote follower counts or public popularity
-                rankings.
+                TrustNet keeps discovery intentional and avoids public
+                popularity rankings.
               </p>
             </div>
           </aside>
